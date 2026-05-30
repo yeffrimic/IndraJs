@@ -1,4 +1,4 @@
-# ⚡ Circuito Puzzle
+# ⚡ IndraJS
 
 > Juego educativo de electrónica para niños y principiantes — aprende conectando circuitos como una serpiente.
 
