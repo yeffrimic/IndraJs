@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor de Niveles</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0d0d1f; color:#ccc; font-family:monospace; min-height:100vh; }
+header { background:#12122a; border-bottom:1px solid #2a2a4a; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; }
+header h1 { font-size:14px; color:#4fc3f7; font-weight:normal; }
+header span { font-size:11px; color:#444; }
+.layout { display:flex; height:calc(100vh - 45px); }
+.sidebar { width:200px; background:#10101e; border-right:1px solid #2a2a4a; padding:14px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; }
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.canvas-area { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; padding:20px; }
+.bottom-bar { background:#10101e; border-top:1px solid #2a2a4a; padding:12px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.right-panel { width:260px; background:#10101e; border-left:1px solid #2a2a4a; padding:14px; display:flex; flex-direction:column; gap:12px; overflow-y:auto; }
+.label { font-size:10px; color:#555; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+.tool-btn { width:100%; padding:8px; border-radius:6px; border:1.5px solid #2a2a4a; background:#1e1e3a; display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; font-family:monospace; color:#888; }
+.tool-btn:hover { background:#252548; }
+.tool-btn.active { border-color:#fff; color:#fff; }
+.tool-icon { width:24px; height:24px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.pgrid { display:grid; gap:3px; user-select:none; }
+.ptile { width:56px; height:56px; border-radius:5px; background:#1e1e3a; border:1.5px solid #2a2a4a; display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer; transition:border-color 0.08s, background 0.08s; }
+.ptile:hover { border-color:#3a3a6a; background:#252548; }
+.order-badge { position:absolute; top:2px; right:3px; font-size:9px; font-weight:bold; font-family:monospace; background:#000a; padding:0 3px; border-radius:3px; pointer-events:none; }
+.comp-inner { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; pointer-events:none; }
+.comp-name { font-size:7px; font-family:monospace; }
+input[type=text], select { background:#1a1a30; border:1px solid #2a2a4a; border-radius:5px; color:#ccc; font-family:monospace; font-size:12px; padding:6px 8px; width:100%; outline:none; }
+input[type=text]:focus, select:focus { border-color:#4fc3f7; }
+.btn { padding:6px 14px; border-radius:6px; border:1px solid #2a2a4a; background:transparent; color:#888; cursor:pointer; font-size:11px; font-family:monospace; transition:background 0.1s; }
+.btn:hover { background:#1e1e3a; color:#ccc; }
+.btn.primary { border-color:#4fc3f7; color:#4fc3f7; }
+.btn.primary:hover { background:#0a1a2a; }
+.btn.success { border-color:#4caf50; color:#4caf50; }
+.btn.success:hover { background:#0a1e0a; }
+.btn.danger { border-color:#ef5350; color:#ef5350; }
+.btn.danger:hover { background:#1e0a0a; }
+.btn.small { padding:4px 10px; font-size:10px; }
+.level-item { padding:8px 10px; border-radius:5px; border:1px solid #2a2a4a; background:#1a1a30; cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:space-between; }
+.level-item:hover { border-color:#3a3a6a; }
+.level-item.active { border-color:#4fc3f7; color:#4fc3f7; }
+.level-item .del { color:#444; font-size:12px; cursor:pointer; padding:0 4px; }
+.level-item .del:hover { color:#ef5350; }
+.hint-row { display:flex; align-items:center; gap:3px; flex-wrap:wrap; }
+.hint-tile { width:36px; height:36px; border-radius:4px; background:#1a1a30; border:1.5px solid #2a2a4a; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:7px; font-family:monospace; gap:2px; position:relative; }
+.hint-order { position:absolute; top:1px; right:2px; font-size:7px; font-weight:bold; }
+.status { font-size:11px; color:#555; }
+.status.ok { color:#4caf50; }
+.status.warn { color:#ff7043; }
+pre.code-out { background:#090914; border:1px solid #2a2a4a; border-radius:5px; padding:10px; font-size:10px; color:#a5d6a7; overflow:auto; max-height:160px; white-space:pre; margin:0; }
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:#0d0d1f; }
+::-webkit-scrollbar-thumb { background:#2a2a4a; border-radius:2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>editor de niveles — circuito puzzle</h1>
+  <span id="save-status">sin cambios</span>
+</header>
+<div class="layout">
+
+  <div class="sidebar">
+    <div>
+      <div class="label">herramienta activa</div>
+      <div id="toolbox" style="display:flex;flex-direction:column;gap:4px;"></div>
+    </div>
+    <div>
+      <div class="label">tamaño grid</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <div>
+          <div style="font-size:10px;color:#555;margin-bottom:3px;">cols</div>
+          <div style="display:flex;gap:3px;align-items:center;">
+            <button class="btn small" onclick="resizeGrid(-1,0)">-</button>
+            <span id="cols-val" style="font-size:12px;color:#ccc;min-width:16px;text-align:center;"></span>
+            <button class="btn small" onclick="resizeGrid(1,0)">+</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:#555;margin-bottom:3px;">filas</div>
+          <div style="display:flex;gap:3px;align-items:center;">
+            <button class="btn small" onclick="resizeGrid(0,-1)">-</button>
+            <span id="rows-val" style="font-size:12px;color:#ccc;min-width:16px;text-align:center;"></span>
+            <button class="btn small" onclick="resizeGrid(0,1)">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="label">orden actual</div>
+      <div id="order-list" style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:#666;min-height:20px;"></div>
+      <div style="margin-top:6px;">
+        <button class="btn small" onclick="resetOrder()">reiniciar orden</button>
+      </div>
+    </div>
+    <div>
+      <div class="label">acciones</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <button class="btn" onclick="clearGrid()">limpiar grid</button>
+        <button class="btn danger" onclick="deleteLevel()">eliminar nivel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="canvas-area">
+      <div class="pgrid" id="grid"></div>
+    </div>
+    <div class="bottom-bar">
+      <div class="status" id="grid-status">—</div>
+      <div style="flex:1;"></div>
+      <span style="font-size:10px;color:#444;">serpiente:</span>
+      <span id="snake-len" style="font-size:12px;color:#ce93d8;">— tiles</span>
+      <div style="width:1px;height:20px;background:#2a2a4a;"></div>
+      <button class="btn primary" onclick="saveLevel()">guardar nivel</button>
+      <button class="btn success" onclick="exportFile()">exportar levels.js</button>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div>
+      <div class="label">nombre del nivel</div>
+      <input type="text" id="level-name" placeholder="ej: resistencias en serie" />
+    </div>
+    <div>
+      <div class="label">dificultad</div>
+      <select id="level-diff">
+        <option value="1">1 — fácil</option>
+        <option value="2">2 — medio</option>
+        <option value="3">3 — difícil</option>
+      </select>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="label" style="margin:0;">niveles guardados</div>
+        <button class="btn small" onclick="newLevel()">+ nuevo</button>
+      </div>
+      <div id="levels-list" style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;"></div>
+    </div>
+    <div>
+      <div class="label">preview serpiente</div>
+      <div class="hint-row" id="hint-row"></div>
+      <div style="font-size:10px;color:#555;margin-top:6px;" id="bfs-detail"></div>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="label" style="margin:0;">notación</div>
+        <button class="btn small" onclick="copyNotation()">copiar</button>
+      </div>
+      <pre class="code-out" id="code-out">—</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+const COMP_DEF = {
+  '0': { color:null,      shape:null,     label:'vacío', sym:'0' },
+  'b': { color:'#4fc3f7', shape:'circle', label:'BAT',   type:'battery'   },
+  'r': { color:'#ce93d8', shape:'rect',   label:'R',     type:'resistor'  },
+  'c': { color:'#a5d6a7', shape:'tri',    label:'CAP',   type:'capacitor' },
+  'l': { color:'#ff7043', shape:'circle', label:'LED',   type:'led'       },
+  's': { color:'#fff176', shape:'circle', label:'SW',    type:'switch'    },
+};
+const TOOLS = ['0','b','r','c','l','s'];
+
+let COLS=7, ROWS=7;
+// gridData guarda objetos: { sym, order } o null para vacío
+let gridData     = makeEmptyGrid(ROWS,COLS);
+let selectedTool = '0';
+let painting     = false;
+let placeCounter = 0;   // se incrementa cada vez que se pone un componente
+let levels       = [];
+let currentLevelIdx = -1;
+
+function makeEmptyGrid(r,c){ return Array.from({length:r},()=>Array(c).fill(null)); }
+
+// ── storage ──
+function saveToStorage(){
+  localStorage.setItem('circuit_levels_v2', JSON.stringify(levels));
+  const el=document.getElementById('save-status');
+  el.textContent='guardado ✓'; el.style.color='#4caf50';
+  setTimeout(()=>{ el.textContent='sin cambios'; el.style.color='#444'; },2000);
+}
+
+function loadFromStorage(){
+  const raw=localStorage.getItem('circuit_levels_v2');
+  if(raw){ try{ levels=JSON.parse(raw); }catch(e){ levels=[]; } }
+  if(levels.length===0) initDefaultLevels();
+}
+
+function initDefaultLevels(){
+  // orden embebido: cada celda es {sym, order} o null
+  function mkGrid(rows){
+    return rows.map(row=>row.map(cell=>{
+      if(cell==='0'||!cell) return null;
+      // formato legacy 'b','r','l' → asignar orden por tipo
+      const orderMap={b:1,r:2,c:3,l:4,s:5};
+      return {sym:cell, order:orderMap[cell]||1};
+    }));
+  }
+  levels=[
+    { name:'nivel 1 — línea simple', diff:1, grid:mkGrid([
+      ['0','0','0','0','0','0','0'],['0','0','0','0','0','0','0'],['0','0','0','0','0','0','0'],
+      ['0','b','0','r','0','l','0'],['0','0','0','0','0','0','0'],['0','0','0','0','0','0','0'],['0','0','0','0','0','0','0']
+    ])},
+    { name:'nivel 2 — en diagonal', diff:1, grid:mkGrid([
+      ['0','0','0','0','0','0','0'],['0','b','0','0','0','0','0'],['0','0','0','0','0','0','0'],
+      ['0','0','0','r','0','0','0'],['0','0','0','0','0','0','0'],['0','0','0','0','0','l','0'],['0','0','0','0','0','0','0']
+    ])}
+  ];
+  saveToStorage();
+}
+
+// ── toolbox ──
+function buildToolbox(){
+  const box=document.getElementById('toolbox');
+  box.innerHTML='';
+  TOOLS.forEach(sym=>{
+    const def=COMP_DEF[sym];
+    const btn=document.createElement('div');
+    btn.className='tool-btn'+(sym===selectedTool?' active':'');
+    btn.dataset.sym=sym;
+    btn.addEventListener('click',()=>selectTool(sym));
+    btn.innerHTML=`<div class="tool-icon">${renderIcon(sym,20)}</div><span>${def.label}</span>`;
+    box.appendChild(btn);
+  });
+}
+
+function selectTool(sym){
+  selectedTool=sym;
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.toggle('active',b.dataset.sym===sym));
+}
+
+function renderIcon(sym,sz){
+  const def=COMP_DEF[sym];
+  if(!def||!def.color) return `<div style="width:${sz*.4}px;height:${sz*.4}px;border-radius:50%;background:#2a2a4a;"></div>`;
+  if(def.shape==='circle') return `<div style="width:${sz}px;height:${sz}px;border-radius:50%;border:2px solid ${def.color};"></div>`;
+  if(def.shape==='rect')   return `<div style="width:${sz}px;height:${sz*.6}px;border:2px solid ${def.color};border-radius:2px;"></div>`;
+  if(def.shape==='tri')    return `<div style="width:0;height:0;border-left:${sz/2}px solid transparent;border-right:${sz/2}px solid transparent;border-bottom:${sz*.8}px solid ${def.color};"></div>`;
+  return '';
+}
+
+// ── grid render ──
+function renderGrid(){
+  const grid=document.getElementById('grid');
+  grid.style.gridTemplateColumns=`repeat(${COLS},56px)`;
+  grid.innerHTML='';
+  document.getElementById('cols-val').textContent=COLS;
+  document.getElementById('rows-val').textContent=ROWS;
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const div=document.createElement('div');
+      div.className='ptile';
+      div.dataset.c=c; div.dataset.r=r;
+      applyTileStyle(div, gridData[r][c]);
+      grid.appendChild(div);
+    }
+  }
+}
+
+function applyTileStyle(div, cell){
+  div.style.borderColor=''; div.style.borderWidth=''; div.style.background='';
+  div.innerHTML='';
+  if(!cell) return;
+  const def=COMP_DEF[cell.sym];
+  if(!def||!def.color) return;
+  div.style.borderColor=def.color;
+  div.style.borderWidth='2px';
+  div.style.background=def.color+'18';
+  const inn=document.createElement('div');
+  inn.className='comp-inner';
+  inn.innerHTML=renderIcon(cell.sym,22)+`<span class="comp-name" style="color:${def.color};">${def.label}</span>`;
+  div.appendChild(inn);
+  // badge de orden
+  const badge=document.createElement('div');
+  badge.className='order-badge';
+  badge.style.color=def.color;
+  badge.textContent=cell.order;
+  div.appendChild(badge);
+}
+
+function refreshTile(c,r){
+  const grid=document.getElementById('grid');
+  const div=grid.children[r*COLS+c];
+  if(div) applyTileStyle(div, gridData[r][c]);
+}
+
+// ── paint ──
+function paintTile(c,r){
+  const sym=selectedTool;
+  if(sym==='0'){
+    gridData[r][c]=null;
+  } else {
+    if(gridData[r][c]&&gridData[r][c].sym===sym){
+      // toggle: quitar
+      gridData[r][c]=null;
+    } else {
+      // poner con el siguiente orden
+      placeCounter++;
+      gridData[r][c]={ sym, order:placeCounter };
+    }
+  }
+  refreshTile(c,r);
+  updateOrderList();
+  updatePreview();
+}
+
+function resizeGrid(dc,dr){
+  const newC=Math.max(3,Math.min(12,COLS+dc));
+  const newR=Math.max(3,Math.min(12,ROWS+dr));
+  const newData=makeEmptyGrid(newR,newC);
+  for(let r=0;r<Math.min(ROWS,newR);r++)
+    for(let c=0;c<Math.min(COLS,newC);c++)
+      newData[r][c]=gridData[r][c];
+  COLS=newC; ROWS=newR; gridData=newData;
+  renderGrid(); updateOrderList(); updatePreview();
+}
+
+function clearGrid(){
+  gridData=makeEmptyGrid(ROWS,COLS);
+  placeCounter=0;
+  renderGrid(); updateOrderList(); updatePreview();
+}
+
+function resetOrder(){
+  // reajusta los números de orden de forma consecutiva según posición actual
+  const comps=getComponents();
+  comps.forEach((comp,i)=>{
+    gridData[comp.r][comp.c].order=i+1;
+    refreshTile(comp.c,comp.r);
+  });
+  placeCounter=comps.length;
+  updateOrderList(); updatePreview();
+}
+
+// ── orden list (sidebar) ──
+function updateOrderList(){
+  const comps=getComponents();
+  const el=document.getElementById('order-list');
+  if(comps.length===0){ el.innerHTML='<span style="color:#444;">sin componentes</span>'; return; }
+  el.innerHTML=comps.map(comp=>{
+    const def=COMP_DEF[comp.sym];
+    return `<div style="display:flex;align-items:center;gap:6px;">
+      <span style="color:${def.color};font-weight:bold;min-width:14px;">${comp.order}</span>
+      <span style="color:${def.color};">${def.label}</span>
+      <span style="color:#444;font-size:9px;">(${comp.c},${comp.r})</span>
+    </div>`;
+  }).join('');
+}
+
+// ── BFS ──
+function bfs(sc,sr,ec,er){
+  const vis=new Set([`${sc},${sr}`]);
+  const q=[{c:sc,r:sr,d:0}];
+  while(q.length){
+    const {c,r,d}=q.shift();
+    if(c===ec&&r===er) return d;
+    for(const [dc,dr] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const nc=c+dc,nr=r+dr,k=`${nc},${nr}`;
+      if(nc>=0&&nc<COLS&&nr>=0&&nr<ROWS&&!vis.has(k)){
+        vis.add(k); q.push({c:nc,r:nr,d:d+1});
+      }
+    }
+  }
+  return 99;
+}
+
+function getComponents(){
+  const raw=[];
+  for(let r=0;r<ROWS;r++)
+    for(let c=0;c<COLS;c++)
+      if(gridData[r][c]) raw.push({...gridData[r][c],c,r});
+  // separar por rol: BAT primero, LED al final, resto en el medio por orden de colocacion
+  const batteries=raw.filter(c=>c.sym==='b').sort((a,b)=>a.order-b.order);
+  const leds=raw.filter(c=>c.sym==='l').sort((a,b)=>a.order-b.order);
+  const middle=raw.filter(c=>c.sym!=='b'&&c.sym!=='l').sort((a,b)=>a.order-b.order);
+  const sorted=[...batteries,...middle,...leds];
+  // reasignar orden consecutivo
+  sorted.forEach((c,i)=>{ c.order=i+1; });
+  return sorted;
+}
+
+// ── preview ──
+function updatePreview(){
+  const comps=getComponents();
+  const hasBat=comps.some(c=>c.sym==='b');
+  const hasLed=comps.some(c=>c.sym==='l');
+  const st=document.getElementById('grid-status');
+  if(!comps.length){ st.textContent='sin componentes'; st.className='status warn'; }
+  else if(!hasBat)  { st.textContent='falta batería (b)'; st.className='status warn'; }
+  else if(!hasLed)  { st.textContent='falta LED (l)'; st.className='status warn'; }
+  else { st.textContent=comps.map(c=>COMP_DEF[c.sym].label+'('+c.order+')').join(' → '); st.className='status ok'; }
+
+  if(comps.length<2){
+    document.getElementById('snake-len').textContent='— tiles';
+    document.getElementById('hint-row').innerHTML='';
+    document.getElementById('bfs-detail').textContent='';
+    document.getElementById('code-out').textContent='—';
+    return;
+  }
+
+  let len=1, dists=[];
+  for(let i=0;i<comps.length-1;i++){
+    const d=bfs(comps[i].c,comps[i].r,comps[i+1].c,comps[i+1].r);
+    dists.push(d); len+=d;
+  }
+  document.getElementById('snake-len').textContent=`${len} tiles`;
+
+  // snake map para hint
+  const map=Array(len).fill(null).map((_,i)=>({comp:null,color:'#1a9e65',label:null,order:null}));
+  let cursor=len-1;
+  for(let i=0;i<comps.length;i++){
+    const def=COMP_DEF[comps[i].sym];
+    map[cursor]={comp:comps[i].type,color:def.color,label:def.label,order:comps[i].order,sym:comps[i].sym};
+    if(i<comps.length-1) cursor-=dists[i];
+  }
+
+  const hint=document.getElementById('hint-row');
+  hint.innerHTML='';
+  [...map].reverse().forEach((sm,i)=>{
+    if(i>0){ const a=document.createElement('div'); a.style.cssText='color:#333;font-size:10px;'; a.textContent='›'; hint.appendChild(a); }
+    const tile=document.createElement('div');
+    tile.className='hint-tile';
+    tile.style.borderColor=sm.color;
+    if(sm.sym){
+      tile.innerHTML=renderIcon(sm.sym,14)+`<span style="color:${sm.color};font-size:6px;">${sm.label}</span>`;
+      const ob=document.createElement('div');
+      ob.className='hint-order'; ob.style.color=sm.color; ob.textContent=sm.order;
+      tile.appendChild(ob);
+    } else {
+      tile.innerHTML=`<div style="width:6px;height:6px;border-radius:50%;background:#1a9e65;opacity:0.3;"></div>`;
+    }
+    hint.appendChild(tile);
+  });
+  const hd=document.createElement('div');
+  hd.style.cssText='color:#4fc3f7;font-size:9px;font-family:monospace;margin-left:3px;';
+  hd.textContent='HEAD';
+  hint.appendChild(hd);
+
+  document.getElementById('bfs-detail').textContent=
+    comps.map((c,i)=>i===comps.length-1?COMP_DEF[c.sym].label:`${COMP_DEF[c.sym].label}→(${dists[i]})`).join(' ');
+
+  // notación: guarda sym+order en cada celda
+  const rows=gridData.map(row=>
+    `    [${row.map(cell=>cell?`'${cell.sym}${cell.order}'`:"'0'").join(',')}]`
+  ).join(',\n');
+  document.getElementById('code-out').textContent=
+    `{\n  name: '${document.getElementById('level-name').value||'sin nombre'}',\n  diff: ${document.getElementById('level-diff').value},\n  grid: [\n${rows}\n  ]\n}`;
+}
+
+document.getElementById('level-name').addEventListener('input',updatePreview);
+document.getElementById('level-diff').addEventListener('change',updatePreview);
+
+// ── levels CRUD ──
+function renderLevelsList(){
+  const list=document.getElementById('levels-list');
+  list.innerHTML='';
+  levels.forEach((lv,idx)=>{
+    const item=document.createElement('div');
+    item.className='level-item'+(idx===currentLevelIdx?' active':'');
+    item.innerHTML=`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${lv.name||'sin nombre'}</span><span style="font-size:9px;color:#444;margin:0 6px;">D${lv.diff||1}</span><span class="del">✕</span>`;
+    item.querySelector('span:first-child').addEventListener('click',()=>loadLevelToEditor(idx));
+    item.querySelector('.del').addEventListener('click',e=>{ e.stopPropagation(); deleteLevelAt(idx); });
+    list.appendChild(item);
+  });
+}
+
+function loadLevelToEditor(idx){
+  currentLevelIdx=idx;
+  const lv=levels[idx];
+  ROWS=lv.grid.length; COLS=lv.grid[0].length;
+  gridData=lv.grid.map(r=>r.map(cell=>cell?{...cell}:null));
+  // recalcular placeCounter
+  const comps=getComponents();
+  placeCounter=comps.length>0?Math.max(...comps.map(c=>c.order)):0;
+  document.getElementById('level-name').value=lv.name||'';
+  document.getElementById('level-diff').value=lv.diff||1;
+  renderGrid(); updateOrderList(); updatePreview(); renderLevelsList();
+}
+
+function newLevel(){
+  levels.push({name:'nuevo nivel',diff:1,grid:makeEmptyGrid(7,7)});
+  currentLevelIdx=levels.length-1;
+  ROWS=7; COLS=7; gridData=makeEmptyGrid(7,7); placeCounter=0;
+  document.getElementById('level-name').value='nuevo nivel';
+  document.getElementById('level-diff').value=1;
+  renderGrid(); updateOrderList(); updatePreview(); renderLevelsList(); saveToStorage();
+}
+
+function saveLevel(){
+  const name=document.getElementById('level-name').value.trim()||'sin nombre';
+  const diff=parseInt(document.getElementById('level-diff').value)||1;
+  const grid=gridData.map(r=>r.map(cell=>cell?{...cell}:null));
+  if(currentLevelIdx<0||currentLevelIdx>=levels.length){
+    levels.push({name,diff,grid}); currentLevelIdx=levels.length-1;
+  } else {
+    levels[currentLevelIdx]={name,diff,grid};
+  }
+  saveToStorage(); renderLevelsList();
+}
+
+function deleteLevelAt(idx){
+  if(!confirm(`¿Eliminar "${levels[idx].name}"?`)) return;
+  levels.splice(idx,1);
+  if(currentLevelIdx>=levels.length) currentLevelIdx=levels.length-1;
+  if(levels.length>0) loadLevelToEditor(Math.max(0,currentLevelIdx));
+  else newLevel();
+  saveToStorage(); renderLevelsList();
+}
+
+function deleteLevel(){ if(currentLevelIdx>=0) deleteLevelAt(currentLevelIdx); }
+
+// ── export ──
+function exportFile(){
+  const out=`// generado por el editor de niveles — ${new Date().toLocaleString()}\nexport const LEVELS = ${JSON.stringify(levels,null,2)};\n`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([out],{type:'text/javascript'}));
+  a.download='levels.js'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+function copyNotation(){
+  navigator.clipboard.writeText(document.getElementById('code-out').textContent).then(()=>{
+    const btn=document.querySelector('button[onclick="copyNotation()"]');
+    btn.textContent='copiado!'; setTimeout(()=>btn.textContent='copiar',1500);
+  });
+}
+
+// ── init ──
+loadFromStorage();
+buildToolbox();
+renderLevelsList();
+if(levels.length>0) loadLevelToEditor(0);
+else { ROWS=7; COLS=7; gridData=makeEmptyGrid(7,7); renderGrid(); updateOrderList(); updatePreview(); }
+
+// event delegation
+const _gridEl=document.getElementById('grid');
+_gridEl.addEventListener('mousedown',function(e){
+  e.preventDefault();
+  const tile=e.target.closest('.ptile');
+  if(!tile) return;
+  painting=true;
+  paintTile(parseInt(tile.dataset.c),parseInt(tile.dataset.r));
+});
+_gridEl.addEventListener('mouseover',function(e){
+  if(!painting) return;
+  const tile=e.target.closest('.ptile');
+  if(!tile) return;
+  paintTile(parseInt(tile.dataset.c),parseInt(tile.dataset.r));
+});
+document.addEventListener('mouseup',function(){ painting=false; });
+</script>
+</body>
+</html>

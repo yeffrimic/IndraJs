@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Probador de Niveles</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0d0d1f; color:#ccc; font-family:monospace; min-height:100vh; display:flex; flex-direction:column; }
+header { background:#12122a; border-bottom:1px solid #2a2a4a; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+header h1 { font-size:14px; color:#4fc3f7; font-weight:normal; }
+.header-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+select { background:#1a1a30; border:1px solid #2a2a4a; border-radius:5px; color:#ccc; font-family:monospace; font-size:12px; padding:5px 8px; outline:none; min-width:200px; }
+select:focus { border-color:#4fc3f7; }
+.btn { padding:6px 14px; border-radius:6px; border:1px solid #2a2a4a; background:transparent; color:#888; cursor:pointer; font-size:11px; font-family:monospace; transition:background 0.1s; }
+.btn:hover { background:#1e1e3a; color:#ccc; }
+.btn.primary { border-color:#4fc3f7; color:#4fc3f7; }
+.btn.small { padding:4px 10px; font-size:10px; }
+.game-area { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px; }
+.hint-bar { display:flex; align-items:center; gap:4px; flex-wrap:wrap; justify-content:center; }
+.hint-tile { width:44px; height:44px; border-radius:5px; background:#12122a; border:1.5px solid #2a2a4a; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:7px; font-family:monospace; gap:2px; position:relative; transition:border-color 0.2s, background 0.2s; }
+.hint-tile.done { border-color:#4caf50; background:#0a1e0a; }
+.hint-tile .order-n { position:absolute; top:2px; right:3px; font-size:7px; font-weight:bold; }
+.pgrid { display:grid; gap:3px; }
+.ptile { width:54px; height:54px; border-radius:5px; background:#1e1e3a; border:1.5px solid #2a2a4a; display:flex; align-items:center; justify-content:center; position:relative; transition:background 0.08s, border-color 0.08s; user-select:none; }
+.ptile.snake-head { background:#0a1a2a; }
+.ptile.snake-body { background:#091e12; }
+.ptile.snake-tail { background:#071610; }
+.ptile.solved { background:#071f07 !important; border-color:#4caf50 !important; }
+.ptile.switch-clickable { cursor:pointer; }
+.ptile.switch-clickable:hover { filter:brightness(1.3); }
+.ptile .comp-inner { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; pointer-events:none; }
+.ptile .comp-name { font-size:7px; font-family:monospace; }
+.ptile .order-badge { position:absolute; top:2px; right:3px; font-size:8px; font-weight:bold; font-family:monospace; background:#000a; padding:0 3px; border-radius:3px; pointer-events:none; }
+.controls { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.ctrl-row { display:flex; gap:4px; }
+.dir-btn { width:48px; height:48px; border-radius:8px; border:1px solid #2a2a4a; background:#1e1e3a; color:#ccc; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.1s; user-select:none; }
+.dir-btn:hover { background:#252548; }
+.dir-btn:active { background:#0a1a2a; transform:scale(0.95); }
+.status-bar { text-align:center; font-size:13px; font-family:monospace; min-height:20px; color:#888; }
+.status-bar.win { color:#4caf50; font-size:15px; }
+.status-bar.switch-prompt { color:#fff176; }
+.stats { display:flex; gap:20px; font-size:11px; color:#555; }
+.empty-state { text-align:center; color:#444; font-size:13px; line-height:2; }
+.switch-indicator { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+.sw-pill { padding:4px 10px; border-radius:20px; font-size:11px; font-family:monospace; border:1.5px solid #555; color:#555; transition:all 0.2s; }
+.sw-pill.closed { border-color:#4caf50; color:#4caf50; background:#0a1e0a; }
+</style>
+</head>
+<body>
+<header>
+  <h1>probador de niveles</h1>
+  <div class="header-right">
+    <select id="level-select" onchange="loadSelectedLevel()">
+      <option value="">— selecciona un nivel —</option>
+    </select>
+    <button class="btn small" onclick="refreshLevels()">↺ recargar</button>
+    <button class="btn small primary" onclick="resetGame()">reiniciar</button>
+    <a href="editor.html" class="btn small" style="text-decoration:none;">← editor</a>
+  </div>
+</header>
+
+<div class="game-area" id="game-area">
+  <div class="empty-state">no hay niveles guardados<br><a href="editor.html" style="color:#4fc3f7;">abre el editor para crear uno</a></div>
+</div>
+
+<script>
+const COMP_DEF = {
+  'b': { color:'#4fc3f7', shape:'circle', label:'BAT',  type:'battery'  },
+  'r': { color:'#ce93d8', shape:'rect',   label:'R',    type:'resistor' },
+  'c': { color:'#a5d6a7', shape:'tri',    label:'CAP',  type:'capacitor'},
+  'l': { color:'#ff7043', shape:'circle', label:'LED',  type:'led'      },
+  's': { color:'#fff176', shape:'circle', label:'SW',   type:'switch'   },
+};
+
+let levels=[], currentLevel=null;
+let COLS=0, ROWS=0;
+let COMPONENTS=[], SNAKE_MAP=[], SNAKE_LENGTH=0;
+let snake=[], moveCount=0;
+let snakeConnected=false, solved=false;
+// estado de switches: { 'c,r': true/false }
+let switchStates={};
+
+// ── storage ──
+function refreshLevels(){
+  const raw=localStorage.getItem('circuit_levels_v2');
+  try{ levels=raw?JSON.parse(raw):[]; }catch(e){ levels=[]; }
+  const sel=document.getElementById('level-select');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— selecciona un nivel —</option>';
+  levels.forEach((lv,i)=>{
+    const opt=document.createElement('option');
+    opt.value=i;
+    opt.textContent=`${i+1}. ${lv.name||'sin nombre'} (D${lv.diff||1})`;
+    sel.appendChild(opt);
+  });
+  if(prev!==''&&levels[parseInt(prev)]) sel.value=prev;
+  if(levels.length===0){
+    document.getElementById('game-area').innerHTML=
+      `<div class="empty-state">no hay niveles guardados<br><a href="editor.html" style="color:#4fc3f7;">abre el editor para crear uno</a></div>`;
+  }
+}
+
+function loadSelectedLevel(){
+  const idx=parseInt(document.getElementById('level-select').value);
+  if(isNaN(idx)||!levels[idx]) return;
+  currentLevel=levels[idx];
+  initGame();
+}
+
+// ── parsear y ordenar componentes (BAT primero, LED al final) ──
+function parseAndSortComponents(grid){
+  const raw=[];
+  for(let r=0;r<grid.length;r++){
+    for(let c=0;c<grid[r].length;c++){
+      const cell=grid[r][c];
+      if(!cell) continue;
+      let sym,order;
+      if(typeof cell==='object'){ sym=cell.sym; order=cell.order; }
+      else if(typeof cell==='string'&&cell!=='0'){ sym=cell[0]; order=parseInt(cell.slice(1))||1; }
+      else continue;
+      if(!COMP_DEF[sym]) continue;
+      raw.push({sym,order,c,r,...COMP_DEF[sym]});
+    }
+  }
+
+  // separar por rol
+  const batteries = raw.filter(c=>c.sym==='b').sort((a,b)=>a.order-b.order);
+  const leds      = raw.filter(c=>c.sym==='l').sort((a,b)=>a.order-b.order);
+  const middle    = raw.filter(c=>c.sym!=='b'&&c.sym!=='l').sort((a,b)=>a.order-b.order);
+
+  // reasignar orden: baterías primero, luego medio, luego LEDs
+  const sorted=[...batteries,...middle,...leds];
+  sorted.forEach((c,i)=>{ c.order=i+1; });
+  return sorted;
+}
+
+function bfs(sc,sr,ec,er){
+  const vis=new Set([`${sc},${sr}`]);
+  const q=[{c:sc,r:sr,d:0}];
+  while(q.length){
+    const {c,r,d}=q.shift();
+    if(c===ec&&r===er) return d;
+    for(const [dc,dr] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const nc=c+dc,nr=r+dr,k=`${nc},${nr}`;
+      if(nc>=0&&nc<COLS&&nr>=0&&nr<ROWS&&!vis.has(k)){
+        vis.add(k); q.push({c:nc,r:nr,d:d+1});
+      }
+    }
+  }
+  return 99;
+}
+
+function buildSnakeMap(comps,len,dists){
+  const map=Array(len).fill(null).map(()=>({comp:null,color:'#1a9e65',label:null,sym:null,order:null}));
+  let cursor=len-1;
+  for(let i=0;i<comps.length;i++){
+    map[cursor]={comp:comps[i].type,color:comps[i].color,label:comps[i].label,sym:comps[i].sym,order:comps[i].order};
+    if(i<comps.length-1) cursor-=dists[i];
+  }
+  return map;
+}
+
+function buildInitialSnake(len){
+  const s=[];
+  let c=COLS-1,r=0;
+  for(let i=0;i<len;i++){
+    s.push({c,r});
+    if(r<ROWS-1) r++;
+    else c=Math.max(0,c-1);
+  }
+  return s;
+}
+
+// ── init ──
+function initGame(){
+  if(!currentLevel) return;
+  const grid=currentLevel.grid;
+  ROWS=grid.length; COLS=grid[0].length;
+  COMPONENTS=parseAndSortComponents(grid);
+  if(COMPONENTS.length<2){
+    document.getElementById('game-area').innerHTML=
+      `<div class="empty-state">este nivel necesita al menos 2 componentes</div>`;
+    return;
+  }
+  let len=1; const dists=[];
+  for(let i=0;i<COMPONENTS.length-1;i++){
+    const d=bfs(COMPONENTS[i].c,COMPONENTS[i].r,COMPONENTS[i+1].c,COMPONENTS[i+1].r);
+    dists.push(d); len+=d;
+  }
+  SNAKE_LENGTH=len;
+  SNAKE_MAP=buildSnakeMap(COMPONENTS,len,dists);
+  snake=buildInitialSnake(len);
+  moveCount=0; snakeConnected=false; solved=false;
+  // inicializar switches abiertos
+  switchStates={};
+  COMPONENTS.filter(c=>c.sym==='s').forEach(sw=>{
+    switchStates[`${sw.c},${sw.r}`]=false;
+  });
+  renderGameArea();
+}
+
+function resetGame(){ if(currentLevel) initGame(); }
+
+// ── render area completa ──
+function renderGameArea(){
+  const area=document.getElementById('game-area');
+  area.innerHTML='';
+
+  // hint
+  const hintWrap=document.createElement('div');
+  hintWrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:5px;';
+  hintWrap.innerHTML='<div style="font-size:10px;color:#555;">orden de conexión</div>';
+  const hintBar=document.createElement('div');
+  hintBar.className='hint-bar'; hintBar.id='hint-bar';
+  hintWrap.appendChild(hintBar);
+  area.appendChild(hintWrap);
+
+  // switch indicators (si hay switches)
+  const hasSwitches=COMPONENTS.some(c=>c.sym==='s');
+  if(hasSwitches){
+    const swWrap=document.createElement('div');
+    swWrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;';
+    swWrap.innerHTML='<div style="font-size:10px;color:#555;">switches</div>';
+    const swInd=document.createElement('div');
+    swInd.className='switch-indicator'; swInd.id='sw-indicator';
+    swWrap.appendChild(swInd);
+    area.appendChild(swWrap);
+  }
+
+  // grid
+  const gridEl=document.createElement('div');
+  gridEl.className='pgrid'; gridEl.id='grid';
+  gridEl.style.gridTemplateColumns=`repeat(${COLS},54px)`;
+  area.appendChild(gridEl);
+
+  // status
+  const statusEl=document.createElement('div');
+  statusEl.className='status-bar'; statusEl.id='status';
+  area.appendChild(statusEl);
+
+  // stats
+  const statsEl=document.createElement('div');
+  statsEl.className='stats'; statsEl.id='stats';
+  area.appendChild(statsEl);
+
+  // controls
+  const ctrl=document.createElement('div');
+  ctrl.className='controls';
+  ctrl.innerHTML=`
+    <div class="ctrl-row"><div style="width:48px"></div><button class="dir-btn" onclick="move(0,-1)">↑</button><div style="width:48px"></div></div>
+    <div class="ctrl-row"><button class="dir-btn" onclick="move(-1,0)">←</button><button class="dir-btn" onclick="move(0,1)">↓</button><button class="dir-btn" onclick="move(1,0)">→</button></div>
+    <div class="ctrl-row" style="margin-top:4px;"><button class="btn small" onclick="resetGame()">reiniciar</button></div>
+  `;
+  area.appendChild(ctrl);
+
+  renderGrid();
+  renderHint();
+  renderSwitchIndicators();
+  updateStatus();
+}
+
+// ── render grid ──
+function renderGrid(){
+  const grid=document.getElementById('grid');
+  if(!grid) return;
+  grid.innerHTML='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const div=document.createElement('div');
+      div.className='ptile';
+      const si=snake.findIndex(s=>s.c===c&&s.r===r);
+      const sm=si>=0?SNAKE_MAP[si]:null;
+      const comp=COMPONENTS.find(co=>co.c===c&&co.r===r);
+      const isSwitch=comp&&comp.sym==='s';
+      const swKey=`${c},${r}`;
+      const swClosed=switchStates[swKey];
+
+      // snake styling
+      if(si===0){ div.classList.add('snake-head'); div.style.borderColor=sm?sm.color:'#4fc3f7'; div.style.borderWidth='2.5px'; }
+      else if(si>0&&si<snake.length-1){ div.classList.add('snake-body'); div.style.borderColor=sm?sm.color:'#1a9e65'; div.style.borderWidth='1.5px'; }
+      else if(si===snake.length-1){ div.classList.add('snake-tail'); div.style.borderColor=sm?sm.color:'#0f5a3a'; div.style.borderWidth='1.5px'; }
+
+      // snake segment inner
+      if(si>=0&&sm){
+        const inn=document.createElement('div');
+        inn.className='comp-inner';
+        if(sm.sym){
+          const sz=si===0?22:16;
+          // switch: mostrar estado abierto/cerrado dentro del segmento
+          if(sm.sym==='s'){
+            inn.innerHTML=renderSwitchIcon(sz,swClosed)+`<span class="comp-name" style="color:${sm.color};">${swClosed?'SW ●':'SW ○'}</span>`;
+          } else {
+            inn.innerHTML=renderIcon(sm.sym,sz)+`<span class="comp-name" style="color:${sm.color};">${sm.label}</span>`;
+          }
+        } else {
+          inn.innerHTML=`<div style="width:8px;height:8px;border-radius:50%;background:${sm.color};opacity:0.35;"></div>`;
+        }
+        if(si===0){
+          const h=document.createElement('div');
+          h.style.cssText='position:absolute;top:2px;left:3px;font-size:6px;color:#4fc3f7;';
+          h.textContent='HEAD';
+          div.appendChild(h);
+        }
+        div.appendChild(inn);
+      }
+
+      // componente en el tile
+      if(comp){
+        const onSnake=si>=0;
+        if(!onSnake){
+          div.style.borderColor=comp.color;
+          div.style.borderWidth='2px';
+          const inn=document.createElement('div');
+          inn.className='comp-inner';
+          if(isSwitch){
+            inn.innerHTML=renderSwitchIcon(24,false)+`<span class="comp-name" style="color:${comp.color};">SW ○</span>`;
+          } else {
+            inn.innerHTML=renderIcon(comp.sym,24)+`<span class="comp-name" style="color:${comp.color};">${comp.label}</span>`;
+          }
+          div.appendChild(inn);
+          const badge=document.createElement('div');
+          badge.className='order-badge'; badge.style.color=comp.color;
+          badge.textContent=comp.order;
+          div.appendChild(badge);
+        } else {
+          // override borde blanco cuando el segmento coincide con componente
+          div.style.borderColor='#ffffff';
+          div.style.borderWidth='2.5px';
+          // switch clickeable solo cuando serpiente conectada
+          if(isSwitch&&snakeConnected&&!solved){
+            div.classList.add('switch-clickable');
+            div.addEventListener('click',()=>toggleSwitch(swKey));
+          }
+        }
+        if(solved) div.classList.add('solved');
+      }
+
+      grid.appendChild(div);
+    }
+  }
+}
+
+function renderSwitchIcon(sz,closed){
+  const col='#fff176';
+  if(closed){
+    return `<div style="width:${sz}px;height:${sz*.4}px;border:2px solid ${col};border-radius:2px;background:${col}33;"></div>`;
+  }
+  // abierto: dos segmentos con gap
+  return `<div style="display:flex;align-items:center;gap:3px;">
+    <div style="width:${sz*.35}px;height:3px;background:${col};border-radius:1px;"></div>
+    <div style="width:${sz*.35}px;height:3px;background:${col};border-radius:1px;margin-top:-6px;transform:rotate(-30deg);"></div>
+  </div>`;
+}
+
+function renderIcon(sym,sz){
+  const def=COMP_DEF[sym];
+  if(!def) return '';
+  if(def.shape==='circle') return `<div style="width:${sz}px;height:${sz}px;border-radius:50%;border:2px solid ${def.color};"></div>`;
+  if(def.shape==='rect')   return `<div style="width:${sz}px;height:${sz*.65}px;border:2px solid ${def.color};border-radius:2px;"></div>`;
+  if(def.shape==='tri')    return `<div style="width:0;height:0;border-left:${sz/2}px solid transparent;border-right:${sz/2}px solid transparent;border-bottom:${sz*.85}px solid ${def.color};"></div>`;
+  return '';
+}
+
+// ── hint bar ──
+function renderHint(){
+  const bar=document.getElementById('hint-bar');
+  if(!bar) return;
+  bar.innerHTML='';
+  [...SNAKE_MAP].reverse().forEach((sm,i)=>{
+    if(i>0){ const a=document.createElement('div'); a.style.cssText='color:#333;font-size:12px;'; a.textContent='›'; bar.appendChild(a); }
+    const tile=document.createElement('div');
+    tile.className='hint-tile';
+    tile.style.borderColor=sm.color;
+    const segIdx=SNAKE_MAP.length-1-i;
+    if(sm.comp&&isSegmentAligned(segIdx)) tile.classList.add('done');
+    if(sm.sym){
+      tile.innerHTML=renderIcon(sm.sym,14)+`<span style="color:${sm.color};font-size:6px;">${sm.label}</span>`;
+      const ob=document.createElement('div');
+      ob.className='order-n'; ob.style.color=sm.color; ob.textContent=sm.order;
+      tile.appendChild(ob);
+    } else {
+      tile.innerHTML=`<div style="width:6px;height:6px;border-radius:50%;background:#1a9e65;opacity:0.25;"></div>`;
+    }
+    bar.appendChild(tile);
+  });
+  const hd=document.createElement('div');
+  hd.style.cssText='color:#4fc3f7;font-size:10px;font-family:monospace;margin-left:3px;';
+  hd.textContent='HEAD';
+  bar.appendChild(hd);
+}
+
+// ── switch indicators ──
+function renderSwitchIndicators(){
+  const el=document.getElementById('sw-indicator');
+  if(!el) return;
+  el.innerHTML='';
+  COMPONENTS.filter(c=>c.sym==='s').forEach(sw=>{
+    const key=`${sw.c},${sw.r}`;
+    const closed=switchStates[key];
+    const pill=document.createElement('div');
+    pill.className='sw-pill'+(closed?' closed':'');
+    pill.textContent=closed?`SW(${sw.order}) ● cerrado`:`SW(${sw.order}) ○ abierto`;
+    el.appendChild(pill);
+  });
+}
+
+// ── mecánica ──
+function isSegmentAligned(segIdx){
+  const seg=snake[segIdx];
+  const sm=SNAKE_MAP[segIdx];
+  if(!seg||!sm||!sm.comp) return false;
+  const comp=COMPONENTS.find(co=>co.c===seg.c&&co.r===seg.r);
+  return comp&&comp.type===sm.comp;
+}
+
+function checkSnakeConnected(){
+  return SNAKE_MAP.every((sm,i)=>{
+    if(!sm.comp) return true;
+    return isSegmentAligned(i);
+  });
+}
+
+function checkAllSwitchesClosed(){
+  return Object.values(switchStates).every(v=>v===true);
+}
+
+function toggleSwitch(key){
+  if(!snakeConnected||solved) return;
+  switchStates[key]=!switchStates[key];
+  // re-verificar victoria
+  if(checkAllSwitchesClosed()) solved=true;
+  renderGrid();
+  renderHint();
+  renderSwitchIndicators();
+  updateStatus();
+}
+
+function move(dc,dr){
+  if(solved) return;
+  const head=snake[0];
+  const nc=head.c+dc, nr=head.r+dr;
+  if(nc<0||nc>=COLS||nr<0||nr>=ROWS) return;
+  if(snake.some(s=>s.c===nc&&s.r===nr)) return;
+  snake.unshift({c:nc,r:nr});
+  snake.pop();
+  moveCount++;
+  snakeConnected=checkSnakeConnected();
+  // si no hay switches y está conectada → ganó directo
+  const hasSwitches=COMPONENTS.some(c=>c.sym==='s');
+  if(snakeConnected&&!hasSwitches) solved=true;
+  renderGrid();
+  renderHint();
+  renderSwitchIndicators();
+  updateStatus();
+}
+
+function updateStatus(){
+  const st=document.getElementById('status');
+  const stats=document.getElementById('stats');
+  if(!st) return;
+  const hasSwitches=COMPONENTS.some(c=>c.sym==='s');
+  if(solved){
+    const pts=Math.max(300-moveCount*5,20);
+    st.className='status-bar win';
+    st.textContent='circuito completo! corriente fluyendo';
+    if(stats) stats.innerHTML=`<span>movimientos: <b style="color:#ccc;">${moveCount}</b></span><span>puntos: <b style="color:#4caf50;">${pts}</b></span>`;
+    return;
+  }
+  if(snakeConnected&&hasSwitches){
+    const pendingSwitches=Object.values(switchStates).filter(v=>!v).length;
+    st.className='status-bar switch-prompt';
+    st.textContent=`serpiente conectada — cierra ${pendingSwitches} switch${pendingSwitches>1?'es':''} para completar el circuito`;
+    if(stats) stats.innerHTML=`<span>movimientos: <b style="color:#ccc;">${moveCount}</b></span>`;
+    return;
+  }
+  const aligned=SNAKE_MAP.filter((sm,i)=>sm.comp&&isSegmentAligned(i)).length;
+  const total=SNAKE_MAP.filter(sm=>sm.comp).length;
+  st.className='status-bar';
+  st.style.color='#888';
+  st.textContent=aligned>0?`${aligned} de ${total} componentes alineados`:'mueve la serpiente para conectar el circuito';
+  if(stats) stats.innerHTML=`<span>movimientos: <b style="color:#ccc;">${moveCount}</b></span>`;
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp')    { e.preventDefault(); move(0,-1); }
+  if(e.key==='ArrowDown')  { e.preventDefault(); move(0,1);  }
+  if(e.key==='ArrowLeft')  { e.preventDefault(); move(-1,0); }
+  if(e.key==='ArrowRight') { e.preventDefault(); move(1,0);  }
+  if(e.key==='r'||e.key==='R') resetGame();
+});
+
+// ── init ──
+refreshLevels();
+if(levels.length>0){
+  document.getElementById('level-select').value='0';
+  loadSelectedLevel();
+}
+</script>
+</body>
+</html>
