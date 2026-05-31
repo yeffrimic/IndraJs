@@ -29,23 +29,21 @@ export default class PuzzleScene extends Phaser.Scene {
       .forEach(sw => { this.switchStates[`${sw.c},${sw.r}`] = false; });
 
     // ── zonas fijas ──
-    // HUD:       36px top
-    // CTRL:      200px right
-    // HINT:      70px bottom
-    // GRID:      el resto centrado
+    const isMobile = window.isMobile || false;
     const HUD_H  = 36;
-    const CTRL_W = 200;
-    const HINT_H = 70;
+    const CTRL_W = isMobile ? 0   : 200;  // en móvil no hay columna derecha
+    const HINT_H = isMobile ? 110 : 70;   // en móvil hint+pad comparten más espacio
     const PAD    = 8;
-    const CTRL_X = width - CTRL_W; // x donde empieza la zona de controles = 600
+    const CTRL_X = width - CTRL_W;
 
     const gridZoneW = CTRL_X - PAD * 2;
     const gridZoneH = height - HUD_H - HINT_H - PAD * 2;
 
-    const GAP    = 3;
-    const tileW  = Math.floor((gridZoneW - (this.COLS - 1) * GAP) / this.COLS);
-    const tileH  = Math.floor((gridZoneH - (this.ROWS - 1) * GAP) / this.ROWS);
-    this.TILE    = Math.min(tileW, tileH, 64);
+    const GAP     = 3;
+    const maxTile = isMobile ? 44 : 64;
+    const tileW   = Math.floor((gridZoneW - (this.COLS - 1) * GAP) / this.COLS);
+    const tileH   = Math.floor((gridZoneH - (this.ROWS - 1) * GAP) / this.ROWS);
+    this.TILE     = Math.min(tileW, tileH, maxTile);
     this.GAP     = GAP;
 
     const gridW  = this.COLS * this.TILE + (this.COLS - 1) * GAP;
@@ -58,9 +56,11 @@ export default class PuzzleScene extends Phaser.Scene {
     // ── fondo ──
     this.add.rectangle(0, 0, width, height, 0x0d0d1f).setOrigin(0);
 
-    // zona controles fondo
-    this.add.rectangle(CTRL_X, HUD_H, CTRL_W, height - HUD_H, 0x09091a).setOrigin(0);
-    this.add.rectangle(CTRL_X, HUD_H, 1, height - HUD_H, 0x2a2a4a).setOrigin(0);
+    // zona controles fondo (solo desktop)
+    if (!isMobile) {
+      this.add.rectangle(CTRL_X, HUD_H, CTRL_W, height - HUD_H, 0x09091a).setOrigin(0);
+      this.add.rectangle(CTRL_X, HUD_H, 1, height - HUD_H, 0x2a2a4a).setOrigin(0);
+    }
 
     // zona hint fondo
     this.add.rectangle(0, height - HINT_H, CTRL_X, HINT_H, 0x080814).setOrigin(0);
@@ -76,10 +76,13 @@ export default class PuzzleScene extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-R', () => this._reiniciar());
 
-    // status en zona controles
-    this.statusTxt = this.add.text(CTRL_X + CTRL_W / 2, HUD_H + 14, '', {
-      fontSize: '12px', color: '#888', fontFamily: 'monospace',
-      wordWrap: { width: CTRL_W - 16 },
+    // status text
+    const statusX = isMobile ? width / 2 : CTRL_X + CTRL_W / 2;
+    const statusY = isMobile ? height - HINT_H + 6 : HUD_H + 14;
+    this.statusTxt = this.add.text(statusX, statusY, '', {
+      fontSize: isMobile ? '10px' : '12px',
+      color: '#888', fontFamily: 'monospace',
+      wordWrap: { width: isMobile ? width / 2 : CTRL_W - 16 },
       align: 'center'
     }).setOrigin(0.5, 0);
 
@@ -385,11 +388,16 @@ export default class PuzzleScene extends Phaser.Scene {
   }
 
   // ── hint bar ──
-  _crearHintBar(barY, maxX) {
-    const tileW = 44, gap = 4;
+  _crearHintBar(barY, maxX, isMobile = false) {
+    const tileW = isMobile ? 36 : 44, gap = isMobile ? 3 : 4;
     const total = this.SNAKE_MAP.length;
     const totalW = total * tileW + (total - 1) * gap;
-    const startX = Math.max(8, (maxX - totalW) / 2);
+    // en móvil centrar en el espacio disponible después del pad (~140px)
+    const hintZoneStart = isMobile ? 140 : 0;
+    const hintZoneW     = isMobile ? maxX - hintZoneStart : maxX;
+    const startX = isMobile
+      ? hintZoneStart + Math.max(0, (hintZoneW - totalW) / 2)
+      : Math.max(8, (maxX - totalW) / 2);
     this.hintTiles = [];
 
     this.add.text(startX, barY + 2, 'orden:', {
@@ -463,19 +471,25 @@ export default class PuzzleScene extends Phaser.Scene {
 
   // ── controles — zona derecha centrada ──
   _crearControles(ctrlX, width, hudH, height) {
-    const btnSz  = 46;
-    const gap    = 5;
-    const padCX  = ctrlX + (width - ctrlX) / 2; // centro zona = 600 + 100 = 700... wait
-    // centro zona controles: ctrlX + (width-ctrlX)/2
-    const zoneCX = ctrlX + (width - ctrlX) / 2;  // 600 + 100 = 700? no: 600 + 200/2 = 700
-    // pad centrado verticalmente en zona: entre status(hudH+40) y fondo(height-20)
+    const isMobile = window.isMobile || false;
+    const btnSz  = isMobile ? 30 : 46;
+    const gap    = isMobile ? 3  : 5;
+    const zoneCX = ctrlX + (width - ctrlX) / 2;
     const padCY  = hudH + 40 + (height - hudH - 40 - 20 - btnSz) / 2 + btnSz / 2 + 30;
+    // posición del pad
+    // pad centrado verticalmente en la zona inferior
+    // zona inferior empieza en height-HINT_H = height-110
+    // pad height total = btnSz*3 + gap*2
+    const padTotalH = btnSz * 3 + gap * 2;
+    const zoneStart = isMobile ? height - 110 : 0;
+    const padX = isMobile ? btnSz + gap + 6 : zoneCX;
+    const padY = isMobile ? zoneStart + (110 - padTotalH) / 2 + padTotalH / 2 : padCY;
 
     const dirs = [
-      { label: '▲', dc:  0, dr: -1, x: zoneCX,            y: padCY - btnSz - gap },
-      { label: '▼', dc:  0, dr:  1, x: zoneCX,            y: padCY + btnSz + gap },
-      { label: '◀', dc: -1, dr:  0, x: zoneCX - btnSz - gap, y: padCY },
-      { label: '▶', dc:  1, dr:  0, x: zoneCX + btnSz + gap, y: padCY },
+      { label: '▲', dc:  0, dr: -1, x: padX,              y: padY - btnSz - gap },
+      { label: '▼', dc:  0, dr:  1, x: padX,              y: padY + btnSz + gap },
+      { label: '◀', dc: -1, dr:  0, x: padX - btnSz - gap, y: padY },
+      { label: '▶', dc:  1, dr:  0, x: padX + btnSz + gap, y: padY },
     ];
 
     dirs.forEach(d => {
@@ -490,12 +504,13 @@ export default class PuzzleScene extends Phaser.Scene {
       btn.on('pointerout',   () => { btn.setFillStyle(0x12122a); btn.setStrokeStyle(1.5, 0x2a2a5a); });
     });
 
-    // reiniciar debajo del pad
-    const rstY = padCY + btnSz + gap + btnSz + 20;
-    const rstBg = this.add.rectangle(zoneCX, rstY, 110, 26, 0x12122a)
+    // reiniciar — en móvil a la derecha del pad, en desktop debajo
+    const rstY = isMobile ? padY + btnSz + gap + btnSz + 20 : padCY + btnSz + gap + btnSz + 20;
+    const rstX = isMobile ? padX : zoneCX;
+    const rstBg = this.add.rectangle(rstX, rstY, 110, 26, 0x12122a)
       .setStrokeStyle(1, 0x333355)
       .setInteractive({ useHandCursor: true });
-    const rstTxt = this.add.text(zoneCX, rstY, 'R — reiniciar', {
+    const rstTxt = this.add.text(rstX, rstY, 'R — reiniciar', {
       fontSize: '11px', color: '#555', fontFamily: 'monospace'
     }).setOrigin(0.5);
     rstBg.on('pointerover',  () => { rstBg.setFillStyle(0x1a1a2a); rstTxt.setColor('#888'); });
@@ -503,6 +518,12 @@ export default class PuzzleScene extends Phaser.Scene {
     rstBg.on('pointerdown',  () => this._reiniciar());
     rstTxt.setInteractive({ useHandCursor: true });
     rstTxt.on('pointerdown', () => this._reiniciar());
+
+    // en móvil también mover el status text arriba del pad
+    if (isMobile && this.statusTxt) {
+      this.statusTxt.setPosition(padX, padY - btnSz * 3);
+      this.statusTxt.setOrigin(0.5, 0);
+    }
   }
 
   // ── mecánica ──

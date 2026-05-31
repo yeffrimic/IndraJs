@@ -54,6 +54,10 @@ export default class RoomScene extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyE    = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
+    // botones táctiles solo en móvil real
+    const isMobile = window.isMobile || false;
+    if (isMobile) this._crearControlesMobile(width, height);
+
     // ── HUD ──
     this._crearHUD(width, height);
 
@@ -205,9 +209,10 @@ export default class RoomScene extends Phaser.Scene {
     const { left, right, up, down } = this.cursors;
     const usingSprite = SpriteConfig.activo() && this.playerSprite;
 
-    // velocidad
-    const vx = left.isDown ? -speed : right.isDown ? speed : 0;
-    const vy  = up.isDown   ? -speed : down.isDown   ? speed : 0;
+    // velocidad — teclado o touch
+    const td = this._touchDir;
+    const vx = left.isDown ? -speed : right.isDown ? speed : td ? td.vx * speed : 0;
+    const vy  = up.isDown   ? -speed : down.isDown   ? speed : td ? td.vy * speed : 0;
 
     if (usingSprite) {
       this.playerSprite.setVelocity(vx, vy);
@@ -246,5 +251,62 @@ export default class RoomScene extends Phaser.Scene {
       return;
     }
     this.scene.start('PuzzleScene', { nivelIdx: GameState.ultimoNivelDesbloqueado });
+  }
+
+  _crearControlesMobile(width, height) {
+    const btnSz = 48, gap = 5;
+    // pad izquierdo — esquina inferior izquierda
+    const bx = 80, by = height - 80;
+
+    const dirs = [
+      { label: '▲', vx:  0,  vy: -1, x: bx,           y: by - btnSz - gap },
+      { label: '▼', vx:  0,  vy:  1, x: bx,           y: by + btnSz + gap },
+      { label: '◀', vx: -1,  vy:  0, x: bx - btnSz - gap, y: by },
+      { label: '▶', vx:  1,  vy:  0, x: bx + btnSz + gap, y: by },
+    ];
+
+    dirs.forEach(d => {
+      const btn = this.add.rectangle(d.x, d.y, btnSz, btnSz, 0x12122a)
+        .setStrokeStyle(1.5, 0x2a2a5a)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(10);
+      this.add.text(d.x, d.y, d.label, {
+        fontSize: '22px', color: '#4fc3f7', fontFamily: 'monospace'
+      }).setOrigin(0.5).setDepth(11);
+
+      // touch — mantener presionado mueve continuamente
+      btn.on('pointerdown', () => {
+        this._touchDir = { vx: d.vx, vy: d.vy };
+        btn.setFillStyle(0x1a1a3a);
+        btn.setStrokeStyle(1.5, 0x4fc3f7);
+      });
+      btn.on('pointerup',   () => {
+        this._touchDir = null;
+        btn.setFillStyle(0x12122a);
+        btn.setStrokeStyle(1.5, 0x2a2a5a);
+      });
+      btn.on('pointerout',  () => {
+        this._touchDir = null;
+        btn.setFillStyle(0x12122a);
+        btn.setStrokeStyle(1.5, 0x2a2a5a);
+      });
+    });
+
+    // botón E — esquina inferior derecha
+    const eBg = this.add.rectangle(width - 60, height - 80, 80, 48, 0x0a1a2a)
+      .setStrokeStyle(1.5, 0x4fc3f7)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(10);
+    this.add.text(width - 60, height - 80, '[ E ]', {
+      fontSize: '14px', color: '#4fc3f7', fontFamily: 'monospace'
+    }).setOrigin(0.5).setDepth(11);
+
+    eBg.on('pointerdown', () => {
+      if (this.cercaDelWorkbench) this._entrarAlWorkbench();
+    });
+    eBg.on('pointerover',  () => eBg.setFillStyle(0x0d2a3e));
+    eBg.on('pointerout',   () => eBg.setFillStyle(0x0a1a2a));
+
+    this._touchDir = null;
   }
 }

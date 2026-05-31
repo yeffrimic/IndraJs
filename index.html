@@ -2,16 +2,64 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mi Juego</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0d0d1f">
+  <title>Circuito Puzzle</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #1a1a2e; display: flex;
-           justify-content: center; align-items: center;
-           height: 100vh; overflow: hidden; }
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #0d0d1f;
+    }
+    canvas {
+      display: block;
+      touch-action: none;
+      margin: 0 auto;
+    }
+    /* Phaser FIT container */
+    #game-container, div[style*="position: relative"] {
+      margin: 0 auto !important;
+    }
+
+    /* mensaje girar dispositivo — solo en portrait móvil */
+    #rotate-msg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0d0d1f;
+      color: #4fc3f7;
+      font-family: monospace;
+      font-size: 14px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 9999;
+      text-align: center;
+      padding: 20px;
+    }
+    #rotate-msg span { font-size: 48px; animation: spin 1.5s ease-in-out infinite; }
+    @keyframes spin { 0%,100%{transform:rotate(0deg)} 50%{transform:rotate(90deg)} }
+    @media screen and (max-width: 768px) and (orientation: portrait) {
+      #rotate-msg { display: flex; }
+    }
   </style>
 </head>
 <body>
+  <div id="rotate-msg">
+    <span>📱</span>
+    <div>gira tu dispositivo</div>
+    <div style="font-size:11px;color:#555;">el juego funciona en horizontal</div>
+  </div>
+  <div id="game-container" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script type="module" src="src/main.js"></script>
 </body>
