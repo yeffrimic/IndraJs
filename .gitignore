@@ -1,0 +1,10 @@
+# Configuración local de Claude Code (permisos por máquina) — no versionar
+.claude/settings.local.json
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Dependencias (por si más adelante se usa npm)
+node_modules/

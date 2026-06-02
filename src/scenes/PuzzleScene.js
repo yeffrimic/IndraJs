@@ -1,5 +1,5 @@
 import GameState from '../state/GameState.js';
-import { LEVELS } from '../levels.js';
+import { LEVELS, packRequerido } from '../levels.js';
 
 export default class PuzzleScene extends Phaser.Scene {
   constructor() { super('PuzzleScene'); }
@@ -27,6 +27,16 @@ export default class PuzzleScene extends Phaser.Scene {
     this.switchStates = {};
     this.COMPONENTS.filter(c => c.sym === 's')
       .forEach(sw => { this.switchStates[`${sw.c},${sw.r}`] = false; });
+
+    // ── energía / pistas ──
+    // la corriente entra donde la serpiente TOCA la celda de la batería en el grid;
+    // se energizan los segmentos de la cabeza (0) hasta el que toca la batería (contactIdx).
+    this.energized      = false;
+    this.contactIdx     = -1;               // segmento que toca la batería (-1 = ninguno)
+    this.bateriaCells   = this.COMPONENTS.filter(c => c.sym === 'b');  // celdas de batería en el grid
+    this.pistaRevelada  = false;            // si el jugador ya gastó una pista en este nivel
+    this._alineadosPrev = new Set();        // componentes ya alineados (para detectar nuevos)
+    this._calcEnergia();
 
     // ── zonas fijas ──
     const isMobile = window.isMobile || false;
@@ -72,6 +82,8 @@ export default class PuzzleScene extends Phaser.Scene {
     this._dibujarGrid();
     this._crearHintBar(height - HINT_H + 4, CTRL_X);
     this._crearControles(CTRL_X, width, HUD_H, height);
+
+    this._crearParticulas();
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-R', () => this._reiniciar());
@@ -256,8 +268,42 @@ export default class PuzzleScene extends Phaser.Scene {
 
         // limpiar objetos anteriores
         const tkey = `${c},${r}`;
-        if (this.tileObjects[tkey]) this.tileObjects[tkey].forEach(o => o.destroy());
+        if (this.tileObjects[tkey]) this.tileObjects[tkey].forEach(o => {
+          this.tweens.killTweensOf(o); o.destroy();
+        });
         this.tileObjects[tkey] = [];
+
+        // corriente: solo se iluminan los segmentos que ya tocaron la batería
+        // (de la cabeza hasta el segmento en contacto), en cascada desde la cabeza
+        if (!this.solved && this.contactIdx >= 0 && si >= 0 && si <= this.contactIdx) {
+          const delay = si * 70;  // cabeza(0) primero → hacia el punto de contacto
+          // relleno encendido (queda claramente iluminado, pulsando)
+          const flow = this.add.rectangle(tcx, tcy, T * 0.96, T * 0.96, 0x4fc3f7, 1)
+            .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35);
+          this.tweens.add({
+            targets: flow, alpha: { from: 0.35, to: 0.75 },
+            duration: 480, delay, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+          });
+          // borde brillante para reforzar el "encendido"
+          const ring = this.add.rectangle(tcx, tcy, T * 0.96, T * 0.96)
+            .setStrokeStyle(2, 0x9fe6ff, 0.9);
+          this.tweens.add({
+            targets: ring, alpha: { from: 0.4, to: 1 },
+            duration: 480, delay, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+          });
+          this.tileObjects[tkey].push(flow, ring);
+        }
+
+        // glow pulsante en componentes alineados (encendidos por la corriente)
+        if (comp && si >= 0 && sm && sm.comp && this._segmentoAlineado(si)) {
+          const glow = this.add.circle(tcx, tcy, T * 0.5, sm.color, 0.35)
+            .setBlendMode(Phaser.BlendModes.ADD);
+          this.tweens.add({
+            targets: glow, alpha: { from: 0.15, to: 0.5 }, scale: { from: 0.85, to: 1.1 },
+            duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+          });
+          this.tileObjects[tkey].push(glow);
+        }
 
         // cabeza
         if (si === 0) {
@@ -285,11 +331,18 @@ export default class PuzzleScene extends Phaser.Scene {
             fontSize: `${Math.max(9, Math.floor(T * 0.16))}px`, color: col, fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 2
           }).setOrigin(0.5);
-          const num  = this.add.text(tx + T - 3, ty + 3, `${comp.order}`, {
-            fontSize: '9px', color: '#ffffff', fontFamily: 'monospace',
+          // número de orden — más grande, con chip de fondo para legibilidad
+          const numSz  = Math.max(13, Math.floor(T * 0.26));
+          const chipR  = numSz * 0.78;
+          const chipX  = tx + T - chipR - 2;
+          const chipY  = ty + chipR + 2;
+          const chip   = this.add.circle(chipX, chipY, chipR, 0x0d0d1f, 0.85)
+            .setStrokeStyle(1.5, def.color);
+          const num    = this.add.text(chipX, chipY, `${comp.order}`, {
+            fontSize: `${numSz}px`, color: '#ffffff', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 2
-          }).setOrigin(1, 0);
-          this.tileObjects[tkey].push(lbl, num);
+          }).setOrigin(0.5);
+          this.tileObjects[tkey].push(lbl, chip, num);
         }
 
         // zona clickeable switch
@@ -387,85 +440,125 @@ export default class PuzzleScene extends Phaser.Scene {
     return objs;
   }
 
-  // ── hint bar ──
-  _crearHintBar(barY, maxX, isMobile = false) {
-    const tileW = isMobile ? 36 : 44, gap = isMobile ? 3 : 4;
-    const total = this.SNAKE_MAP.length;
-    const totalW = total * tileW + (total - 1) * gap;
-    // en móvil centrar en el espacio disponible después del pad (~140px)
-    const hintZoneStart = isMobile ? 140 : 0;
-    const hintZoneW     = isMobile ? maxX - hintZoneStart : maxX;
-    const startX = isMobile
-      ? hintZoneStart + Math.max(0, (hintZoneW - totalW) / 2)
-      : Math.max(8, (maxX - totalW) / 2);
-    this.hintTiles = [];
+  // ── barra de pista (oculta hasta hacer click) ──
+  _crearHintBar(barY, maxX) {
+    const isMobile = window.isMobile || false;
+    this.hintBarY  = barY;
+    this.hintCy    = barY + (isMobile ? 36 : 34);
+    this.hintSeqObjs = [];     // objetos de la secuencia revelada
+    this.hintTiles   = [];     // fondos de cada componente (para resaltar alineados)
 
-    this.add.text(startX, barY + 2, 'orden:', {
-      fontSize: '9px', color: '#333', fontFamily: 'monospace'
-    });
+    // botón de pista a la izquierda; la secuencia se dibuja a su derecha
+    const zoneLeft = isMobile ? 150 : 10;
+    const btnW = isMobile ? 96 : 120, btnH = isMobile ? 30 : 34;
+    this.seqStartX = zoneLeft + btnW + (isMobile ? 10 : 20);
 
-    [...this.SNAKE_MAP].reverse().forEach((sm, i) => {
-      const hx  = startX + i * (tileW + gap);
+    this.pistaBg = this.add.rectangle(zoneLeft, this.hintCy, btnW, btnH, 0x12122a)
+      .setOrigin(0, 0.5).setStrokeStyle(1.5, 0xfff176)
+      .setInteractive({ useHandCursor: true });
+    this.pistaTxt = this.add.text(zoneLeft + btnW / 2, this.hintCy, '', {
+      fontSize: isMobile ? '11px' : '12px', color: '#fff176', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+    this.pistaBg.on('pointerover', () => this.pistaBg.setFillStyle(0x1a1a2a));
+    this.pistaBg.on('pointerout',  () => this.pistaBg.setFillStyle(0x12122a));
+    this.pistaBg.on('pointerdown', () => this._revelarPista());
+    this.pistaTxt.setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this._revelarPista());
+
+    this._dibujarBotonPista();
+  }
+
+  _dibujarBotonPista() {
+    const n = GameState.pistas;
+    if (this.pistaRevelada) {
+      this.pistaTxt.setText(`pista (${n})`);
+      this.pistaTxt.setColor('#4caf50');
+      this.pistaBg.setStrokeStyle(1.5, 0x4caf50);
+    } else if (n > 0) {
+      this.pistaTxt.setText(`💡 pista (${n})`);
+      this.pistaTxt.setColor('#fff176');
+      this.pistaBg.setStrokeStyle(1.5, 0xfff176);
+    } else {
+      this.pistaTxt.setText('🔒 conseguir');
+      this.pistaTxt.setColor('#4fc3f7');
+      this.pistaBg.setStrokeStyle(1.5, 0x4fc3f7);
+    }
+  }
+
+  _revelarPista() {
+    if (this.pistaRevelada) return;
+    if (GameState.pistas > 0) {
+      GameState.usarPista();
+      this.pistaRevelada = true;
+      this._dibujarSecuenciaPista();
+      this._actualizarHintTiles();
+      this._dibujarBotonPista();
+    } else {
+      // sin pistas → a la tienda a comprar más
+      this.scene.start('StoreScene', { cat: 'mejoras' });
+    }
+  }
+
+  // dibuja SOLO la secuencia de componentes en orden (sin huecos ni cabeza)
+  _dibujarSecuenciaPista() {
+    this.hintSeqObjs.forEach(o => o.destroy());
+    this.hintSeqObjs = [];
+    this.hintTiles   = [];
+
+    const isMobile = window.isMobile || false;
+    const tileW = isMobile ? 40 : 48, gap = isMobile ? 8 : 12;
+    const tileH = isMobile ? 46 : 52;
+    const cy    = this.hintCy;
+    const comps = this.COMPONENTS;  // ya ordenado por order
+
+    comps.forEach((comp, i) => {
+      const def = this._compDef(comp.sym);
+      const col = `#${def.color.toString(16).padStart(6,'0')}`;
+      const hx  = this.seqStartX + i * (tileW + gap);
       const hcx = hx + tileW / 2;
-      const hcy = barY + 14 + 22;
 
-      const bg = this.add.rectangle(hcx, hcy, tileW, 44, 0x12122a)
-        .setStrokeStyle(1, sm.color || 0x2a2a4a);
+      const bg = this.add.rectangle(hcx, cy, tileW, tileH, 0x12122a)
+        .setStrokeStyle(1.5, def.color);
       this.hintTiles.push(bg);
+      this.hintSeqObjs.push(bg);
 
-      if (sm.sym) {
-        const hg = this.add.graphics();
-        hg.lineStyle(1.5, sm.color, 1);
-        const iy = hcy - 8;
-        if (sm.sym === 'b' || sm.sym === 'l') hg.strokeCircle(hcx, iy, 8);
-        else if (sm.sym === 'r') hg.strokeRect(hcx-9, iy-5, 18, 10);
-        else if (sm.sym === 'c') hg.strokeTriangle(hcx, iy-8, hcx-8, iy+6, hcx+8, iy+6);
-        else if (sm.sym === 's') {
-          hg.beginPath(); hg.moveTo(hcx-8, iy); hg.lineTo(hcx-2, iy); hg.strokePath();
-          hg.beginPath(); hg.moveTo(hcx+2, iy-5); hg.lineTo(hcx+8, iy); hg.strokePath();
-        }
-        const col = `#${sm.color.toString(16).padStart(6,'0')}`;
-        // label más brillante para mejor legibilidad
-        this.add.text(hcx, hcy + 13, sm.label, {
-          fontSize: '10px', color: col, fontFamily: 'monospace',
-          stroke: '#000000', strokeThickness: 2
-        }).setOrigin(0.5, 0);
-        if (sm.order) {
-          this.add.text(hx + tileW - 2, hcy - 22, `${sm.order}`, {
-            fontSize: '9px', color: '#ffffff', fontFamily: 'monospace',
-            stroke: '#000000', strokeThickness: 2
-          }).setOrigin(1, 0);
-        }
-      } else {
-        const isHead = i === total - 1;
-        if (isHead) {
-          const hg = this.add.graphics();
-          hg.lineStyle(1.5, 0x4fc3f7, 0.7);
-          hg.strokeTriangle(hcx+9, hcy, hcx-5, hcy-9, hcx-5, hcy+9);
-          this.add.text(hcx, hcy + 13, 'HEAD', {
-            fontSize: '9px', color: '#4fc3f7', fontFamily: 'monospace'
-          }).setOrigin(0.5, 0);
-        } else {
-          this.add.circle(hcx, hcy - 4, 3, 0x1a9e65, 0.3);
-          this.add.text(hcx, hcy + 13, '·  ·', {
-            fontSize: '9px', color: '#1a3a2a', fontFamily: 'monospace'
-          }).setOrigin(0.5, 0);
-        }
+      // etiqueta arriba (distingue BAT vs LED, ambos círculos)
+      const lbl = this.add.text(hcx, cy - tileH / 2 + 8, def.label, {
+        fontSize: '8px', color: col, fontFamily: 'monospace'
+      }).setOrigin(0.5);
+      this.hintSeqObjs.push(lbl);
+
+      // símbolo al centro
+      const symObjs = this._dibujarSimbolo(comp.sym, hcx, cy - 1, tileW * 0.18, def.color, false);
+      this.hintSeqObjs.push(...symObjs);
+
+      // número de orden — grande
+      const num = this.add.text(hcx, cy + tileH / 2 - 9, `${comp.order}`, {
+        fontSize: isMobile ? '14px' : '16px', color: '#ffffff', fontFamily: 'monospace',
+        stroke: '#000000', strokeThickness: 3
+      }).setOrigin(0.5);
+      this.hintSeqObjs.push(num);
+
+      // flecha de secuencia
+      if (i < comps.length - 1) {
+        const arrow = this.add.text(hx + tileW + gap / 2, cy, '›', {
+          fontSize: '16px', color: '#555', fontFamily: 'monospace'
+        }).setOrigin(0.5);
+        this.hintSeqObjs.push(arrow);
       }
     });
   }
 
   _actualizarHintTiles() {
-    if (!this.hintTiles) return;
-    [...this.SNAKE_MAP].reverse().forEach((sm, i) => {
-      if (!this.hintTiles[i]) return;
-      const segIdx   = this.SNAKE_MAP.length - 1 - i;
-      const alineado = sm.comp && this._segmentoAlineado(segIdx);
-      this.hintTiles[i].setFillStyle(alineado ? 0x0a1e0a : 0x12122a);
-      this.hintTiles[i].setStrokeStyle(
-        alineado ? 2 : 1,
-        alineado ? 0x4caf50 : (sm.color || 0x2a2a4a)
-      );
+    if (!this.pistaRevelada || !this.hintTiles.length) return;
+    this.COMPONENTS.forEach((comp, i) => {
+      const tile = this.hintTiles[i];
+      if (!tile) return;
+      const segIdx = this.SNAKE_MAP.findIndex(sm => sm.comp && sm.order === comp.order);
+      const alineado = segIdx >= 0 && this._segmentoAlineado(segIdx);
+      tile.setFillStyle(alineado ? 0x0a1e0a : 0x12122a);
+      tile.setStrokeStyle(alineado ? 2.5 : 1.5,
+        alineado ? 0x4caf50 : this._compDef(comp.sym).color);
     });
   }
 
@@ -526,6 +619,125 @@ export default class PuzzleScene extends Phaser.Scene {
     }
   }
 
+  // ── partículas / energía ──
+  _crearParticulas() {
+    // textura blanca generada en runtime (sin assets) — se tiñe con `tint`
+    if (!this.textures.exists('chispa')) {
+      const g = this.make.graphics({ add: false });
+      g.fillStyle(0xffffff, 1); g.fillCircle(8, 8, 8);
+      g.fillStyle(0xffffff, 0.4); g.fillCircle(8, 8, 5);
+      g.generateTexture('chispa', 16, 16);
+      g.destroy();
+    }
+    // emisor de energía persistente (sobrevive a los redibujados por paso)
+    this.energyEmitter = this.add.particles(0, 0, 'chispa', {
+      speed:     { min: 8, max: 36 },
+      angle:     { min: 0, max: 360 },
+      scale:     { start: 0.5, end: 0 },
+      alpha:     { start: 0.9, end: 0 },
+      lifespan:  500,
+      frequency: 55,
+      quantity:  1,
+      tint:      0x4fc3f7,
+      blendMode: 'ADD',
+      emitting:  false,
+    });
+    this.energyEmitter.setDepth(100);
+  }
+
+  // calcula qué parte de la serpiente tiene corriente:
+  // contactIdx = índice más alto que toca la batería; se energiza 0..contactIdx
+  _calcEnergia() {
+    let contact = -1;
+    for (let i = 0; i < this.snake.length; i++) {
+      const seg = this.snake[i];
+      if (this.bateriaCells.some(b => b.c === seg.c && b.r === seg.r) && i > contact) {
+        contact = i;
+      }
+    }
+    this.contactIdx = contact;
+    this.energized  = contact >= 0;
+  }
+
+  // anillo breve en la cabeza al moverse (sensación de paso)
+  _popCabeza() {
+    const head = this.snake[0];
+    const p = this._celdaCentro(head.c, head.r);
+    const ring = this.add.circle(p.x, p.y, this.TILE * 0.3, 0x4fc3f7, 0.35)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(98);
+    this.tweens.add({
+      targets: ring, scale: 1.6, alpha: 0, duration: 220, ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    });
+  }
+
+  // centro en pixeles de una celda del grid
+  _celdaCentro(c, r) {
+    const T = this.TILE;
+    return {
+      x: this.originX + c * (T + this.GAP) + T / 2,
+      y: this.originY + r * (T + this.GAP) + T / 2,
+    };
+  }
+
+  // reubica el emisor de energía en la cabeza y lo enciende/apaga según `energized`
+  _actualizarEnergia() {
+    if (!this.energyEmitter) return;
+    if (this.energized && !this.solved) {
+      const head = this.snake[0];
+      const p = this._celdaCentro(head.c, head.r);
+      this.energyEmitter.setPosition(p.x, p.y);
+      this.energyEmitter.emitting = true;
+    } else {
+      this.energyEmitter.emitting = false;
+    }
+  }
+
+  // ráfaga corta de partículas + flash cuando un componente se alinea ("se enciende")
+  _chispazo(c, r, color) {
+    const p = this._celdaCentro(c, r);
+    const burst = this.add.particles(p.x, p.y, 'chispa', {
+      speed:     { min: 30, max: 90 },
+      angle:     { min: 0, max: 360 },
+      scale:     { start: 0.7, end: 0 },
+      alpha:     { start: 1, end: 0 },
+      lifespan:  450,
+      tint:      color,
+      blendMode: 'ADD',
+      emitting:  false,
+    });
+    burst.setDepth(101);
+    burst.explode(14);
+    this.time.delayedCall(550, () => burst.destroy());
+
+    // flash radial
+    const flash = this.add.circle(p.x, p.y, this.TILE * 0.5, color, 0.6).setDepth(99);
+    this.tweens.add({
+      targets: flash, scale: 1.8, alpha: 0, duration: 400,
+      onComplete: () => flash.destroy()
+    });
+  }
+
+  // ráfaga de celebración a lo largo de toda la serpiente
+  _celebrar() {
+    this.snake.forEach((seg, i) => {
+      const sm = this.SNAKE_MAP[i];
+      const color = (sm && sm.color) || 0x4caf50;
+      this.time.delayedCall(i * 35, () => {
+        if (!this.scene.isActive()) return;
+        const p = this._celdaCentro(seg.c, seg.r);
+        const burst = this.add.particles(p.x, p.y, 'chispa', {
+          speed: { min: 40, max: 110 }, angle: { min: 0, max: 360 },
+          scale: { start: 0.7, end: 0 }, alpha: { start: 1, end: 0 },
+          lifespan: 600, tint: color, blendMode: 'ADD', emitting: false,
+        });
+        burst.setDepth(101);
+        burst.explode(16);
+        this.time.delayedCall(700, () => burst.destroy());
+      });
+    });
+  }
+
   // ── mecánica ──
   _segmentoAlineado(segIdx) {
     const seg = this.snake[segIdx];
@@ -559,9 +771,37 @@ export default class PuzzleScene extends Phaser.Scene {
     this.headDir = { dc, dr };
     this.moveTxt.setText(`mov: ${this.moveCount}`);
     this.connected = this._checkConectado();
+
+    // energía: corriente desde donde la serpiente toca la celda de la batería
+    this._calcEnergia();
+    // detectar componentes recién alineados para el chispazo
+    this._detectarNuevosAlineados();
+
     const hasSwitches = this.COMPONENTS.some(c => c.sym === 's');
     if (this.connected && !hasSwitches) this._ganar();
-    else { this._dibujarGrid(); this._actualizarHintTiles(); this._actualizarStatus(); }
+    else {
+      this._dibujarGrid();
+      this._popCabeza();
+      this._actualizarEnergia();
+      this._actualizarHintTiles();
+      this._actualizarStatus();
+    }
+  }
+
+  // dispara chispazo en los componentes que pasaron a estar alineados en este paso
+  _detectarNuevosAlineados() {
+    const ahora = new Set();
+    this.SNAKE_MAP.forEach((sm, i) => {
+      if (sm.comp && this._segmentoAlineado(i)) {
+        const seg = this.snake[i];
+        const key = `${seg.c},${seg.r}`;
+        ahora.add(key);
+        if (!this._alineadosPrev.has(key)) {
+          this._chispazo(seg.c, seg.r, sm.color);
+        }
+      }
+    });
+    this._alineadosPrev = ahora;
   }
 
   _reiniciar() {
@@ -570,9 +810,13 @@ export default class PuzzleScene extends Phaser.Scene {
 
   _ganar() {
     this.solved = true;
-    const puntos = Math.max(300 - this.moveCount * 5, 20);
-    GameState.completarNivel(this.nivelIdx, puntos);
+    if (this.energyEmitter) this.energyEmitter.emitting = false;
+    const puntos     = Math.max(300 - this.moveCount * 5, 20);
+    const eraPrimera = !GameState.nivelesCompletados.includes(this.nivelIdx);
+    const ganados    = GameState.completarNivel(this.nivelIdx, puntos);  // 0 si no mejoró
+    const mejor      = GameState.mejorPuntaje[this.nivelIdx] || puntos;
     this._dibujarGrid();
+    this._celebrar();
 
     const { width, height } = this.scale;
     const CTRL_X = width - 200;
@@ -587,20 +831,36 @@ export default class PuzzleScene extends Phaser.Scene {
     this.add.text(panelX, height / 2 - 40, `movimientos: ${this.moveCount}`, {
       fontSize: '12px', color: '#888', fontFamily: 'monospace'
     }).setOrigin(0.5);
-    this.add.text(panelX, height / 2 - 16, `+${puntos} puntos`, {
-      fontSize: '18px', color: '#fff176', fontFamily: 'monospace'
+    // puntaje otorgado — distingue primera vez / récord mejorado / sin mejora
+    let scoreTxt, scoreCol, scoreSz;
+    if (ganados > 0 && eraPrimera) {
+      scoreTxt = `+${ganados} puntos`;            scoreCol = '#fff176'; scoreSz = '18px';
+    } else if (ganados > 0) {
+      scoreTxt = `+${ganados} pts · ¡nuevo récord!`; scoreCol = '#4caf50'; scoreSz = '15px';
+    } else {
+      scoreTxt = `sin mejora · tu récord: ${mejor} pts`; scoreCol = '#888'; scoreSz = '12px';
+    }
+    this.add.text(panelX, height / 2 - 16, scoreTxt, {
+      fontSize: scoreSz, color: scoreCol, fontFamily: 'monospace'
     }).setOrigin(0.5);
 
     const siguienteIdx = this.nivelIdx + 1;
+    const sigPack      = packRequerido(siguienteIdx);
+    const sigBloqueado = sigPack && !GameState.tieneDesbloqueo(sigPack);
     const hayMas = siguienteIdx < LEVELS.length && GameState.puedeJugarHoy();
 
-    if (hayMas) {
+    if (hayMas && !sigBloqueado) {
       const btnSig = this.add.text(panelX, height / 2 + 30, '[ siguiente nivel ]', {
         fontSize: '13px', color: '#4fc3f7', fontFamily: 'monospace'
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
       btnSig.on('pointerdown', () => this.scene.start('PuzzleScene', { nivelIdx: siguienteIdx }));
+    } else if (hayMas && sigBloqueado) {
+      const btnTienda = this.add.text(panelX, height / 2 + 30, '[ desbloquear en la tienda 🛒 ]', {
+        fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      btnTienda.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
     } else {
-      const msg = !GameState.puedeJugarHoy() ? '¡completaste tus 10 niveles de hoy!' : '¡completaste todos los niveles!';
+      const msg = !GameState.puedeJugarHoy() ? '¡completaste tus niveles de hoy!' : '¡completaste todos los niveles!';
       this.add.text(panelX, height / 2 + 30, msg, {
         fontSize: '11px', color: '#888', fontFamily: 'monospace'
       }).setOrigin(0.5);

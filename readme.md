@@ -13,7 +13,9 @@
 
 **Circuito Puzzle** es un videojuego educativo top-down donde el jugador controla una serpiente que representa el flujo de corriente eléctrica. El reto es maniobrar la serpiente para conectar los componentes electrónicos en el orden correcto — batería → resistencia → capacitor → LED — y completar el circuito.
 
-Diseñado para niños y estudiantes sin conocimiento previo de electrónica, con una mecánica intuitiva de 10 niveles diarios que progresa en dificultad.
+Cuando la serpiente toca la batería, la **corriente recorre su cuerpo iluminándolo** y los componentes se encienden con partículas al conectarse. Hay una **tienda 🛒** para gastar las monedas ganadas en energía, packs de niveles, pistas y muebles para el cuarto.
+
+Diseñado para niños y estudiantes sin conocimiento previo de electrónica, con una mecánica intuitiva de niveles diarios que progresa en dificultad.
 
 ---
 
@@ -21,13 +23,15 @@ Diseñado para niños y estudiantes sin conocimiento previo de electrónica, con
 
 ### En el cuarto
 - **Flechas** — mover al personaje
-- **E** — interactuar con el workbench (cuando estés cerca)
+- **E** — interactuar con el objeto cercano (cuando estés cerca)
 - Acércate al **⚡ WORKBENCH** para iniciar un puzzle
+- Acércate a la **🛒 TIENDA** para gastar tus monedas
 
 ### En el puzzle
 - **Flechas** — mover la serpiente
 - **R** — reiniciar el nivel
-- La serpiente muestra el orden de conexión en su cuerpo
+- **💡 pista** — revela el orden de los componentes (gastás 1 de tus 3 pistas)
+- Maniobrá la serpiente sobre la **batería**: la corriente ilumina su cuerpo
 - Cuando todos los componentes estén alineados, ¡el circuito se completa!
 - Si hay un **switch**, haz click en él para cerrarlo
 
@@ -51,15 +55,17 @@ circuito-puzzle/
 ├── tester.html         ← probador de niveles
 ├── src/
 │   ├── main.js         ← configuración de Phaser
-│   ├── levels.js       ← niveles del juego
+│   ├── levels.js       ← niveles del juego (+ packs comprables)
+│   ├── tienda.js       ← catálogo de la tienda
 │   ├── SpriteConfig.js ← configuración de sprites
 │   ├── state/
-│   │   └── GameState.js
+│   │   └── GameState.js ← progreso, monedas, pistas, compras
 │   └── scenes/
 │       ├── BootScene.js
 │       ├── LoginScene.js
 │       ├── RoomScene.js
-│       └── PuzzleScene.js
+│       ├── PuzzleScene.js
+│       └── StoreScene.js ← la tienda
 └── assets/             ← sprites (cuando estén disponibles)
 ```
 
@@ -131,7 +137,7 @@ const SpriteConfig = {
 
 ---
 
-## 🧠 Sistema de puntaje
+## 🧠 Sistema de puntaje y economía
 
 | Acción | Puntos |
 |--------|--------|
@@ -139,7 +145,20 @@ const SpriteConfig = {
 | Mínimo garantizado | 20 pts |
 | Máximo posible | 300 pts (solución óptima) |
 
-El puntaje se guarda por perfil de usuario en `localStorage`. Cada jugador tiene un límite de **10 niveles por día** — los niveles se desbloquean uno a uno al completar el anterior.
+- El puntaje y las **monedas** se guardan por perfil en `localStorage`. Ganás monedas iguales al puntaje, pero **gastarlas en la tienda no baja tu récord**.
+- Se registra el **mejor puntaje por nivel**: al rejugar, solo sumás la **diferencia** si superás tu marca anterior — así podés exprimir cada puzzle hasta el óptimo sin farmeo.
+- Límite de **10 niveles nuevos por día**; los replays no consumen el cupo. Con **energía** (tienda) podés jugar más niveles ese día.
+
+## 🛒 Tienda
+
+Gastá tus monedas en cuatro categorías:
+
+| Categoría | Qué compra |
+|-----------|-----------|
+| ⚡ Energía | Más niveles para jugar hoy (supera el límite diario) |
+| 🎮 Niveles | Packs de niveles (intermedios; circuitos paralelos *próximamente*) |
+| ✨ Mejoras | Recarga de pistas (+3) |
+| 🪑 Muebles | Decoración para tu cuarto (planta, lámpara, póster, tapete) |
 
 ---
 
@@ -149,17 +168,30 @@ El puntaje se guarda por perfil de usuario en `localStorage`. Cada jugador tiene
 - **JavaScript ES6** — módulos nativos, sin bundler
 - **localStorage** — persistencia de datos sin backend
 - **BFS (Breadth-First Search)** — cálculo automático de longitud de serpiente
+- **Partículas + tweens de Phaser** — efectos de corriente, energía y celebración
+- **Gráficos vectoriales** generados en runtime — funciona sin assets (placeholders)
+
+---
+
+## 🌱 Cómo ha crecido
+
+- **v0.1 — Base.** Cuarto top-down + puzzle de la serpiente, 10 niveles, perfiles y puntaje.
+- **v0.2 — Tienda 🛒.** Moneda separada, energía (más niveles por día), packs de niveles, mejoras y muebles para el cuarto.
+- **v0.3 — Serpiente viva ⚡.** La corriente ilumina el cuerpo desde la batería, partículas al conectar cada componente, números de orden más grandes y pistas bajo demanda (3 gratis, recargables en la tienda).
+- **v0.4 — Economía pulida.** Récord por nivel: los replays solo premian la mejora, sin farmeo infinito.
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Sprites y animaciones del personaje
-- [ ] Tienda de decoración del cuarto
+- [x] Tienda con monedas, energía, packs, pistas y muebles
+- [x] Animaciones de la serpiente (corriente, partículas, energía)
+- [x] Récords por nivel y mejora en replays
+- [ ] Sprites y animaciones del personaje (pixel art)
+- [ ] **Circuitos paralelos** — nueva mecánica (ya reservado en la tienda)
+- [ ] Componentes avanzados (transistores, diodos)
 - [ ] Sonidos y música ambiente
-- [ ] Pantalla de progreso y récords
 - [ ] Tilemap con Tiled
-- [ ] Más niveles con componentes avanzados (transistores, diodos)
 - [ ] Backend para guardar progreso en la nube
 
 ---

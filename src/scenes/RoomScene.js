@@ -1,5 +1,6 @@
 import GameState    from '../state/GameState.js';
 import SpriteConfig from '../SpriteConfig.js';
+import { packRequerido } from '../levels.js';
 
 export default class RoomScene extends Phaser.Scene {
   constructor() { super('RoomScene'); }
@@ -36,19 +37,44 @@ export default class RoomScene extends Phaser.Scene {
       duration: 600, yoyo: true, repeat: -1
     });
 
+    // ── tienda ──
+    const TIENDA_X = 380, TIENDA_Y = 120;
+    if (S.get('cuarto', 'tienda')) {
+      const cfg = S.cuarto.tienda;
+      this.add.image(TIENDA_X, TIENDA_Y, cfg.key).setOrigin(0.5).setScale(cfg.escala);
+    } else {
+      this._dibujarTiendaPlaceholder(TIENDA_X, TIENDA_Y);
+    }
+    this.add.text(TIENDA_X, TIENDA_Y + 55, '🛒 TIENDA', {
+      fontSize: '11px', color: '#fff176', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+    this.tiendaHint = this.add.text(TIENDA_X, TIENDA_Y + 72, '[ acércate ]', {
+      fontSize: '10px', color: '#fff176', fontFamily: 'monospace'
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({
+      targets: this.tiendaHint,
+      alpha: { from: 0, to: 1 },
+      duration: 600, yoyo: true, repeat: -1
+    });
+
     // ── escritorio ──
     if (S.get('cuarto', 'escritorio')) {
       const cfg = S.cuarto.escritorio;
       this.add.image(160, 120, cfg.key).setOrigin(0.5).setScale(cfg.escala);
     }
 
+    // ── muebles comprados ──
+    this._dibujarMuebles(S);
+
     // ── personaje ──
     this._crearPersonaje(200, 400, S);
 
-    // ── zona de proximidad al workbench ──
+    // ── zonas de proximidad (workbench + tienda) ──
     this.WORKBENCH_POS = { x: WB_X, y: WB_Y };
+    this.TIENDA_POS    = { x: TIENDA_X, y: TIENDA_Y };
     this.PROXIMITY_DIST = 120;
     this.cercaDelWorkbench = false;
+    this.cercaDeTienda     = false;
 
     // ── controles ──
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -143,6 +169,69 @@ export default class RoomScene extends Phaser.Scene {
     g.strokeRoundedRect(96, 324, 528, 202, 5);
   }
 
+  // ── placeholder tienda (hasta tener pixel art en SpriteConfig) ──
+  _dibujarTiendaPlaceholder(x, y) {
+    const g = this.add.graphics();
+    // toldo
+    g.fillStyle(0xfff176, 0.9); g.fillRect(x - 40, y - 36, 80, 14);
+    g.fillStyle(0x0d0d1f, 1);
+    for (let i = 0; i < 5; i++) g.fillRect(x - 40 + i * 16 + 4, y - 36, 8, 14);
+    // mostrador
+    g.fillStyle(0x2a1e0e); g.fillRect(x - 42, y - 22, 84, 44);
+    g.fillStyle(0x1e1408); g.fillRect(x - 42, y + 8, 84, 14);
+    // marco
+    g.lineStyle(2, 0xfff176, 0.7); g.strokeRect(x - 42, y - 22, 84, 44);
+    // carrito
+    g.lineStyle(2, 0xfff176, 1);
+    g.strokeRect(x - 12, y - 14, 24, 16);
+    g.strokeCircle(x - 6, y + 8, 3);
+    g.strokeCircle(x + 6, y + 8, 3);
+  }
+
+  // ── muebles comprados ──
+  _dibujarMuebles(S) {
+    const posMueble = {
+      planta:  { x: 740, y: 430 },
+      lampara: { x: 60,  y: 250 },
+      poster:  { x: 300, y: 70  },
+      tapete:  { x: 360, y: 470 },
+    };
+    GameState.desbloqueos
+      .filter(id => id.startsWith('mueble_'))
+      .forEach(id => {
+        const tipo = id.replace('mueble_', '');
+        const pos  = posMueble[tipo];
+        if (!pos) return;
+        const key = S.get('muebles', tipo);
+        if (key) this.add.image(pos.x, pos.y, key).setOrigin(0.5).setScale(S.muebles[tipo].escala);
+        else     this._dibujarMueblePlaceholder(tipo, pos.x, pos.y);
+      });
+  }
+
+  _dibujarMueblePlaceholder(tipo, x, y) {
+    const g = this.add.graphics();
+    if (tipo === 'planta') {
+      g.fillStyle(0x3d2810); g.fillRect(x - 10, y, 20, 16);          // maceta
+      g.fillStyle(0x2a1e08); g.fillRect(x - 11, y, 22, 4);
+      g.fillStyle(0xa5d6a7); g.fillCircle(x, y - 8, 12);             // follaje
+      g.fillStyle(0x1a9e65); g.fillCircle(x - 6, y - 4, 7); g.fillCircle(x + 6, y - 4, 7);
+    } else if (tipo === 'lampara') {
+      g.fillStyle(0x2a2a4a); g.fillRect(x - 2, y - 30, 4, 40);       // poste
+      g.fillStyle(0x1e1408); g.fillRect(x - 10, y + 8, 20, 4);       // base
+      g.fillStyle(0xfff176, 0.9); g.fillTriangle(x - 16, y - 30, x + 16, y - 30, x, y - 50); // pantalla
+      g.fillStyle(0xfff176, 0.25); g.fillCircle(x, y - 24, 18);      // halo
+    } else if (tipo === 'poster') {
+      g.fillStyle(0x12122a); g.fillRect(x - 26, y - 18, 52, 36);
+      g.lineStyle(2, 0xce93d8, 1); g.strokeRect(x - 26, y - 18, 52, 36);
+      g.lineStyle(1.5, 0x4fc3f7, 1);
+      g.strokeCircle(x - 10, y, 6); g.strokeRect(x + 2, y - 5, 12, 10); // mini circuito
+      g.beginPath(); g.moveTo(x - 4, y); g.lineTo(x + 2, y); g.strokePath();
+    } else if (tipo === 'tapete') {
+      g.fillStyle(0x1e1e3a); g.fillRoundedRect(x - 60, y - 36, 120, 72, 8);
+      g.lineStyle(1.5, 0x4fc3f7, 0.4); g.strokeRoundedRect(x - 52, y - 28, 104, 56, 5);
+    }
+  }
+
   _crearHUD(width, height) {
     // barra superior
     this.add.rectangle(0, 0, width, 30, 0x080814, 0.95).setOrigin(0);
@@ -152,8 +241,12 @@ export default class RoomScene extends Phaser.Scene {
       fontSize: '12px', color: '#4fc3f7', fontFamily: 'monospace'
     }).setOrigin(0, 0.5);
 
-    this.txtPuntos = this.add.text(width / 2, 15, `★ ${GameState.puntosTotal} pts`, {
+    this.txtPuntos = this.add.text(width / 2 - 70, 15, `★ ${GameState.puntosTotal} pts`, {
       fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+    }).setOrigin(0.5, 0.5);
+
+    this.txtMonedas = this.add.text(width / 2 + 70, 15, `🪙 ${GameState.monedas}`, {
+      fontSize: '12px', color: '#ffd54f', fontFamily: 'monospace'
     }).setOrigin(0.5, 0.5);
 
     const restantes = GameState.nivelesRestantesHoy();
@@ -227,22 +320,35 @@ export default class RoomScene extends Phaser.Scene {
       this._dibujarPersonajePlaceholder(this.player.x, this.player.y);
     }
 
-    // proximidad al workbench
+    // proximidad a workbench y tienda
     const px = usingSprite ? this.playerSprite.x : this.player.x;
     const py = usingSprite ? this.playerSprite.y : this.player.y;
-    const dist = Phaser.Math.Distance.Between(px, py, this.WORKBENCH_POS.x, this.WORKBENCH_POS.y);
-    const cerca = dist < this.PROXIMITY_DIST;
 
-    if (cerca !== this.cercaDelWorkbench) {
-      this.cercaDelWorkbench = cerca;
-      this.interactHint.setText(cerca ? '[ E ] entrar al workbench' : '[ acércate ]');
-      this.interactHint.setAlpha(cerca ? 1 : 0);
+    const distWB = Phaser.Math.Distance.Between(px, py, this.WORKBENCH_POS.x, this.WORKBENCH_POS.y);
+    const distTD = Phaser.Math.Distance.Between(px, py, this.TIENDA_POS.x, this.TIENDA_POS.y);
+    // si ambos están en rango, gana el más cercano (no mostrar dos hints a la vez)
+    const cercaWB = distWB < this.PROXIMITY_DIST && distWB <= distTD;
+    const cercaTD = distTD < this.PROXIMITY_DIST && distTD <  distWB;
+
+    if (cercaWB !== this.cercaDelWorkbench) {
+      this.cercaDelWorkbench = cercaWB;
+      this.interactHint.setText(cercaWB ? '[ E ] entrar al workbench' : '[ acércate ]');
+      this.interactHint.setAlpha(cercaWB ? 1 : 0);
+    }
+    if (cercaTD !== this.cercaDeTienda) {
+      this.cercaDeTienda = cercaTD;
+      this.tiendaHint.setText(cercaTD ? '[ E ] abrir la tienda' : '[ acércate ]');
+      this.tiendaHint.setAlpha(cercaTD ? 1 : 0);
     }
 
-    // activar workbench con E o click cuando está cerca
-    if (cerca && Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      this._entrarAlWorkbench();
-    }
+    // activar con E el objeto cercano
+    if (Phaser.Input.Keyboard.JustDown(this.keyE)) this._interactuar();
+  }
+
+  // entra a workbench o tienda según cuál esté cerca
+  _interactuar() {
+    if (this.cercaDeTienda)        this.scene.start('StoreScene');
+    else if (this.cercaDelWorkbench) this._entrarAlWorkbench();
   }
 
   _entrarAlWorkbench() {
@@ -250,7 +356,33 @@ export default class RoomScene extends Phaser.Scene {
       this._mostrarMensajeDia();
       return;
     }
-    this.scene.start('PuzzleScene', { nivelIdx: GameState.ultimoNivelDesbloqueado });
+    const idx = GameState.ultimoNivelDesbloqueado;
+    const pack = packRequerido(idx);
+    if (pack && !GameState.tieneDesbloqueo(pack)) {
+      this._mostrarMensajePack();
+      return;
+    }
+    this.scene.start('PuzzleScene', { nivelIdx: idx });
+  }
+
+  _mostrarMensajePack() {
+    const { width, height } = this.scale;
+    const panel = this.add.rectangle(width/2, height/2, 380, 140, 0x12122a)
+      .setStrokeStyle(1, 0xfff176);
+    const t1 = this.add.text(width/2, height/2 - 28, 'este nivel es de un pack bloqueado', {
+      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+    const t2 = this.add.text(width/2, height/2 + 2, 'desbloquéalo en la 🛒 tienda', {
+      fontSize: '11px', color: '#666', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+    const btn = this.add.text(width/2, height/2 + 36, '[ ir a la tienda ]', {
+      fontSize: '13px', color: '#4fc3f7', fontFamily: 'monospace'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    btn.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
+    const cerrar = this.add.text(width/2, height/2 + 58, '[ cerrar ]', {
+      fontSize: '10px', color: '#444', fontFamily: 'monospace'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    cerrar.on('pointerdown', () => [panel,t1,t2,btn,cerrar].forEach(o=>o.destroy()));
   }
 
   _crearControlesMobile(width, height) {
@@ -301,9 +433,7 @@ export default class RoomScene extends Phaser.Scene {
       fontSize: '14px', color: '#4fc3f7', fontFamily: 'monospace'
     }).setOrigin(0.5).setDepth(11);
 
-    eBg.on('pointerdown', () => {
-      if (this.cercaDelWorkbench) this._entrarAlWorkbench();
-    });
+    eBg.on('pointerdown', () => this._interactuar());
     eBg.on('pointerover',  () => eBg.setFillStyle(0x0d2a3e));
     eBg.on('pointerout',   () => eBg.setFillStyle(0x0a1a2a));
 

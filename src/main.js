@@ -2,6 +2,7 @@ import BootScene   from './scenes/BootScene.js';
 import LoginScene  from './scenes/LoginScene.js';
 import RoomScene   from './scenes/RoomScene.js';
 import PuzzleScene from './scenes/PuzzleScene.js';
+import StoreScene  from './scenes/StoreScene.js';
 
 const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent) ||
                  ('ontouchstart' in window && navigator.maxTouchPoints > 1);
@@ -25,7 +26,7 @@ const config = {
     arcade: { debug: false }
   },
 
-  scene: [BootScene, LoginScene, RoomScene, PuzzleScene]
+  scene: [BootScene, LoginScene, RoomScene, PuzzleScene, StoreScene]
 };
 
 window.game = new Phaser.Game(config);

@@ -202,4 +202,66 @@ export const LEVELS = [
     ]
   },
 
+  // ════════════════════════════════════════════════════════════
+  //  PACK INTERMEDIOS — se desbloquea comprándolo en la tienda
+  //  grids más grandes (9 col) con mecánica existente
+  // ════════════════════════════════════════════════════════════
+
+  // ── intermedio 1 — espacio amplio ──
+  // dificultad: 3 | pack: intermedios
+  {
+    name: 'sala de pruebas',
+    diff: 3,
+    pack: 'intermedios',
+    grid: [
+      [null,null,null,null,null,null,null,null,null],
+      [null,{sym:'b',order:1},null,null,null,null,null,null,null],
+      [null,null,null,null,{sym:'r',order:2},null,null,null,null],
+      [null,null,null,null,null,null,null,{sym:'c',order:3},null],
+      [null,null,null,null,null,null,null,null,null],
+      [null,null,{sym:'l',order:4},null,null,null,null,null,null],
+      [null,null,null,null,null,null,null,null,null],
+    ]
+  },
+
+  // ── intermedio 2 — doble switch amplio ──
+  // dificultad: 4 | pack: intermedios
+  {
+    name: 'puente doble',
+    diff: 4,
+    pack: 'intermedios',
+    grid: [
+      [null,{sym:'b',order:1},null,null,null,null,null,null,null],
+      [null,null,null,null,null,null,null,null,null],
+      [null,null,null,{sym:'s',order:2},null,null,null,null,null],
+      [null,null,null,null,null,null,{sym:'r',order:3},null,null],
+      [null,null,null,null,null,null,null,null,null],
+      [null,null,{sym:'s',order:4},null,null,null,null,{sym:'c',order:5},null],
+      [null,null,null,null,null,null,null,null,{sym:'l',order:6}],
+    ]
+  },
+
+  // ── intermedio 3 — recorrido largo ──
+  // dificultad: 4 | pack: intermedios
+  {
+    name: 'gran circuito',
+    diff: 4,
+    pack: 'intermedios',
+    grid: [
+      [null,{sym:'b',order:1},null,null,null,null,null,null,null],
+      [null,null,null,null,{sym:'r',order:2},null,null,null,null],
+      [null,null,null,null,null,null,null,null,null],
+      [null,null,null,null,null,null,{sym:'c',order:3},null,null],
+      [null,{sym:'s',order:4},null,null,null,null,null,null,null],
+      [null,null,null,null,{sym:'r',order:5},null,null,null,null],
+      [null,null,null,null,null,null,null,null,{sym:'l',order:6}],
+    ]
+  },
+
 ];
+
+// id de desbloqueo requerido para jugar un nivel (o null si es libre)
+export function packRequerido(idx) {
+  const lvl = LEVELS[idx];
+  return lvl && lvl.pack ? `pack_${lvl.pack}` : null;
+}

@@ -29,9 +29,18 @@ const SpriteConfig = {
   cuarto: {
     bg:        { key: 'cuarto_bg',   path: 'assets/cuarto_bg.png'   },
     workbench: { key: 'workbench',   path: 'assets/workbench.png',  escala: 1   },
+    tienda:    { key: 'tienda',      path: 'assets/tienda.png',     escala: 1   },
     escritorio:{ key: 'escritorio',  path: 'assets/escritorio.png', escala: 1   },
     alfombra:  { key: 'alfombra',    path: 'assets/alfombra.png',   escala: 1   },
     estante:   { key: 'estante',     path: 'assets/estante.png',    escala: 1   },
+  },
+
+  // ── muebles comprables en la tienda (placeholder vectorial hasta tener pixel art) ──
+  muebles: {
+    planta:  { key: 'mueble_planta',  path: 'assets/muebles/planta.png',  escala: 1 },
+    lampara: { key: 'mueble_lampara', path: 'assets/muebles/lampara.png', escala: 1 },
+    poster:  { key: 'mueble_poster',  path: 'assets/muebles/poster.png',  escala: 1 },
+    tapete:  { key: 'mueble_tapete',  path: 'assets/muebles/tapete.png',  escala: 1 },
   },
 
   // ── componentes del puzzle ──
@@ -81,6 +90,11 @@ const SpriteConfig = {
 
     // cuarto
     Object.values(this.cuarto).forEach(a => {
+      images.push({ key: a.key, path: a.path });
+    });
+
+    // muebles
+    Object.values(this.muebles).forEach(a => {
       images.push({ key: a.key, path: a.path });
     });
 
