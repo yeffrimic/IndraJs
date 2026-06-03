@@ -143,11 +143,23 @@ const SpriteConfig = {
 |--------|--------|
 | Completar nivel | 300 − (movimientos × 5) |
 | Mínimo garantizado | 20 pts |
-| Máximo posible | 300 pts (solución óptima) |
+| Máximo por nivel | depende del óptimo (~150–235, la serpiente nace lejos y debe viajar) |
 
 - El puntaje y las **monedas** se guardan por perfil en `localStorage`. Ganás monedas iguales al puntaje, pero **gastarlas en la tienda no baja tu récord**.
 - Se registra el **mejor puntaje por nivel**: al rejugar, solo sumás la **diferencia** si superás tu marca anterior — así podés exprimir cada puzzle hasta el óptimo sin farmeo.
 - Límite de **10 niveles nuevos por día**; los replays no consumen el cupo. Con **energía** (tienda) podés jugar más niveles ese día.
+
+### ⭐ Estrellas (maestría)
+
+Cada nivel tiene un **óptimo de pasos** exacto = `(largo de la serpiente − 1) + distancia del nacimiento a la batería`. Según qué tan cerca quedes:
+
+| Estrellas | Condición |
+|-----------|-----------|
+| ★★★ | resuelto en el óptimo |
+| ★★ | hasta 25 % por encima del óptimo |
+| ★ | completado |
+
+Las mejores estrellas por nivel se guardan y se suman en el cuarto (`⭐ total`).
 
 ## 🛒 Tienda
 

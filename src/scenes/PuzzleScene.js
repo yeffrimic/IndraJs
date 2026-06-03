@@ -1,4 +1,5 @@
-import GameState from '../state/GameState.js';
+import GameState    from '../state/GameState.js';
+import SpriteConfig from '../SpriteConfig.js';
 import { LEVELS, packRequerido } from '../levels.js';
 
 export default class PuzzleScene extends Phaser.Scene {
@@ -33,10 +34,20 @@ export default class PuzzleScene extends Phaser.Scene {
     // se energizan los segmentos de la cabeza (0) hasta el que toca la batería (contactIdx).
     this.energized      = false;
     this.contactIdx     = -1;               // segmento que toca la batería (-1 = ninguno)
+    this.lowerIdx       = 0;                // compuerta: switch abierto que corta la corriente
     this.bateriaCells   = this.COMPONENTS.filter(c => c.sym === 'b');  // celdas de batería en el grid
     this.pistaRevelada  = false;            // si el jugador ya gastó una pista en este nivel
     this._alineadosPrev = new Set();        // componentes ya alineados (para detectar nuevos)
     this._calcEnergia();
+
+    // óptimo exacto de pasos = (largo-1) + distancia del nacimiento a la batería.
+    // (la cabeza debe llegar a la batería y luego trazar todo el cuerpo; validado por BFS)
+    const head0  = this.snake[0];           // nacimiento de la serpiente (aún sin moverse)
+    const bat    = this.bateriaCells[0];
+    const idxBat = this.SNAKE_MAP.findIndex(sm => sm.sym === 'b');  // ahora en len-2 (no el último)
+    this.OPTIMO = (bat && idxBat >= 0)
+      ? idxBat + Math.abs(head0.c - bat.c) + Math.abs(head0.r - bat.r)
+      : this.SNAKE_LENGTH;
 
     // ── zonas fijas ──
     const isMobile = window.isMobile || false;
@@ -63,8 +74,10 @@ export default class PuzzleScene extends Phaser.Scene {
     this.originX = PAD + Math.floor((gridZoneW - gridW) / 2);
     this.originY = HUD_H + PAD + Math.floor((gridZoneH - gridH) / 2);
 
-    // ── fondo ──
-    this.add.rectangle(0, 0, width, height, 0x0d0d1f).setOrigin(0);
+    // ── fondo (placeholder → pixel art) ──
+    SpriteConfig.fondo(this, 'puzzle', width, height, 0x0d0d1f);
+    // ¿hay sprite de cuadro de grid cargado? (decide tiles imagen vs vectoriales)
+    this.usaGridSprite = !!SpriteConfig.get('grid', 'tile') && this.textures.exists('tile');
 
     // zona controles fondo (solo desktop)
     if (!isMobile) {
@@ -159,13 +172,13 @@ export default class PuzzleScene extends Phaser.Scene {
       const d = this._bfs(comps[i].c, comps[i].r, comps[i+1].c, comps[i+1].r);
       dists.push(d); len += d;
     }
-    // +1 segmento extra al inicio: cabeza vacía después del LED
-    len += 1;
+    // +1 cabeza vacía (al frente) y +1 cola vacía (detrás de la batería, siempre última)
+    len += 2;
     this.SNAKE_LENGTH = len;
     this.SNAKE_MAP = Array(len).fill(null).map(() => ({
       comp: null, color: 0x1a9e65, sym: null, label: null, order: null
     }));
-    let cursor = len - 1;
+    let cursor = len - 2;   // batería en len-2; el índice len-1 queda como cola vacía
     for (let i = 0; i < comps.length; i++) {
       const def = this._compDef(comps[i].sym);
       this.SNAKE_MAP[cursor] = {
@@ -194,8 +207,20 @@ export default class PuzzleScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, 36, 0x080814).setOrigin(0);
     this.add.rectangle(0, 36, width, 1, 0x2a2a4a).setOrigin(0);
 
+    // botón selector de niveles — izquierda
+    const nivBg = this.add.rectangle(10, 18, 26, 22, 0x12122a)
+      .setStrokeStyle(1, 0x4fc3f7).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+    const nivTxt = this.add.text(23, 18, '☰', {
+      fontSize: '15px', color: '#4fc3f7', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+    const abrirNiveles = () => this.scene.start('LevelSelectScene', { desde: this.nivelIdx });
+    nivBg.on('pointerover', () => nivBg.setFillStyle(0x1a1a3a));
+    nivBg.on('pointerout',  () => nivBg.setFillStyle(0x12122a));
+    nivBg.on('pointerdown', abrirNiveles);
+    nivTxt.setInteractive({ useHandCursor: true }).on('pointerdown', abrirNiveles);
+
     // nombre nivel — izquierda
-    this.add.text(12, 18, levelData.name.toUpperCase(), {
+    this.add.text(44, 18, levelData.name.toUpperCase(), {
       fontSize: '11px', color: '#4fc3f7', fontFamily: 'monospace'
     }).setOrigin(0, 0.5);
 
@@ -243,27 +268,28 @@ export default class PuzzleScene extends Phaser.Scene {
         const comp  = this.COMPONENTS.find(co => co.c === c && co.r === r);
         const swKey = `${c},${r}`;
 
-        // fondo
-        let bg = 0x1e1e3a;
-        if (si === 0)                                   bg = 0x0d0d1f;
-        else if (si > 0 && si < this.snake.length - 1) bg = 0x091e12;
-        else if (si === this.snake.length - 1)          bg = 0x071610;
-        g.fillStyle(bg);
-        g.fillRoundedRect(tx, ty, T, T, 4);
+        // fondo + borde del cuadro — vectorial (placeholder); se omite si hay sprite de tile
+        if (!this.usaGridSprite) {
+          let bg = 0x1e1e3a;
+          if (si === 0)                                   bg = 0x0d0d1f;
+          else if (si > 0 && si < this.snake.length - 1) bg = 0x091e12;
+          else if (si === this.snake.length - 1)          bg = 0x071610;
+          g.fillStyle(bg);
+          g.fillRoundedRect(tx, ty, T, T, 4);
 
-        // borde
-        let borderCol = 0x2a2a4a, borderW = 1;
-        if (si > 0 && sm)   { borderCol = sm.color; borderW = 1.5; }
-        if (si === 0)       { borderCol = 0x000000; borderW = 0; }
-        if (comp && si < 0) { borderCol = this._compDef(comp.sym).color; borderW = 2; }
-        if (comp && si >= 0){ borderCol = 0xffffff; borderW = 2; }
-        if (comp && comp.sym === 's' && si >= 0 && this.connected && !this.solved) {
-          borderCol = 0xfff176; borderW = 2.5;
-        }
-        if (this.solved) { borderCol = 0x4caf50; borderW = 2; }
-        if (borderW > 0) {
-          g.lineStyle(borderW, borderCol, 1);
-          g.strokeRoundedRect(tx, ty, T, T, 4);
+          let borderCol = 0x2a2a4a, borderW = 1;
+          if (si > 0 && sm)   { borderCol = sm.color; borderW = 1.5; }
+          if (si === 0)       { borderCol = 0x000000; borderW = 0; }
+          if (comp && si < 0) { borderCol = this._compDef(comp.sym).color; borderW = 2; }
+          if (comp && si >= 0){ borderCol = 0xffffff; borderW = 2; }
+          if (comp && comp.sym === 's' && si >= 0 && this.connected && !this.solved) {
+            borderCol = 0xfff176; borderW = 2.5;
+          }
+          if (this.solved) { borderCol = 0x4caf50; borderW = 2; }
+          if (borderW > 0) {
+            g.lineStyle(borderW, borderCol, 1);
+            g.strokeRoundedRect(tx, ty, T, T, 4);
+          }
         }
 
         // limpiar objetos anteriores
@@ -273,9 +299,38 @@ export default class PuzzleScene extends Phaser.Scene {
         });
         this.tileObjects[tkey] = [];
 
-        // corriente: solo se iluminan los segmentos que ya tocaron la batería
-        // (de la cabeza hasta el segmento en contacto), en cascada desde la cabeza
-        if (!this.solved && this.contactIdx >= 0 && si >= 0 && si <= this.contactIdx) {
+        // cuadro como sprite (si hay pixel art de tile cargado)
+        if (this.usaGridSprite) {
+          const tn = si === 0 ? 'tile_head'
+                   : si > 0   ? 'tile_body'
+                   : comp     ? 'tile_goal' : 'tile';
+          const timg = SpriteConfig.colocar(this, 'grid', tn, tcx, tcy,
+            () => SpriteConfig.colocar(this, 'grid', 'tile', tcx, tcy, null));
+          if (timg) { timg.setDisplaySize(T, T); this.tileObjects[tkey].push(timg); }
+        }
+
+        // ── cuerpo / cola de la serpiente (sprite de plastilina) — base del segmento ──
+        let cuerpoSprite = false;
+        if (si > 0) {
+          const esCola = si === this.snake.length - 1;
+          const ck = SpriteConfig.get('serpiente', esCola ? 'cola' : 'cuerpo');
+          if (ck && this.textures.exists(ck)) {
+            const seg = this.add.image(tcx, tcy, ck).setDisplaySize(T, T);
+            if (esCola) {                       // cola: orientar hacia afuera (lejos del cuerpo)
+              const nb = this.snake[si - 1];
+              if (nb) seg.setAngle(Phaser.Math.RadToDeg(Math.atan2(r - nb.r, c - nb.c)));
+            } else {                            // cuerpo: rotar el enlace según su orientación
+              const prev = this.snake[si - 1];  // vecino hacia la cabeza
+              if (prev) seg.setAngle(Phaser.Math.RadToDeg(Math.atan2(prev.r - r, prev.c - c)));
+            }
+            this.tileObjects[tkey].push(seg);
+            cuerpoSprite = true;
+          }
+        }
+
+        // corriente: se iluminan los segmentos energizados [lowerIdx..contactIdx].
+        // un switch abierto sube lowerIdx y corta el flujo antes de la cabeza.
+        if (!this.solved && this.contactIdx >= 0 && si >= this.lowerIdx && si <= this.contactIdx) {
           const delay = si * 70;  // cabeza(0) primero → hacia el punto de contacto
           // relleno encendido (queda claramente iluminado, pulsando)
           const flow = this.add.rectangle(tcx, tcy, T * 0.96, T * 0.96, 0x4fc3f7, 1)
@@ -305,44 +360,51 @@ export default class PuzzleScene extends Phaser.Scene {
           this.tileObjects[tkey].push(glow);
         }
 
-        // cabeza
-        if (si === 0) {
-          const objs = this._dibujarCabeza(tx, ty, T, this.headDir);
-          this.tileObjects[tkey].push(...objs);
-        }
-        // cuerpo con componente
-        else if (si > 0 && sm && sm.sym) {
-          const objs = this._dibujarSimbolo(sm.sym, tcx, tcy, T * 0.28, sm.color, this.switchStates[swKey]);
-          this.tileObjects[tkey].push(...objs);
-        }
-        // cuerpo vacío
-        else if (si > 0 && sm && !sm.sym) {
-          const dot = this.add.circle(tcx, tcy, T * 0.08, sm.color, 0.35);
-          this.tileObjects[tkey].push(dot);
-        }
-
-        // componente sin serpiente
-        if (comp && si < 0) {
+        // ── figura objetivo del componente — visible mientras se juega ──
+        // (resuelto: no se dibuja, la serpiente cubre todo limpio)
+        if (comp && !this.solved) {
+          const cubierto = si >= 0;  // hay un segmento de serpiente sobre la celda
           const def  = this._compDef(comp.sym);
           const objs = this._dibujarSimbolo(comp.sym, tcx, tcy - T * 0.1, T * 0.32, def.color, this.switchStates[swKey]);
+          // bajo la serpiente la figura va un poco tenue, pero presente
+          objs.forEach(o => o.setAlpha(cubierto ? 0.55 : 1));
           this.tileObjects[tkey].push(...objs);
           const col  = `#${def.color.toString(16).padStart(6,'0')}`;
           const lbl  = this.add.text(tcx, tcy + T * 0.22, def.label, {
             fontSize: `${Math.max(9, Math.floor(T * 0.16))}px`, color: col, fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 2
-          }).setOrigin(0.5);
-          // número de orden — más grande, con chip de fondo para legibilidad
+          }).setOrigin(0.5).setAlpha(cubierto ? 0.6 : 1);
+          // número de orden — SIEMPRE nítido (referencia clave que no debe perderse)
           const numSz  = Math.max(13, Math.floor(T * 0.26));
           const chipR  = numSz * 0.78;
           const chipX  = tx + T - chipR - 2;
           const chipY  = ty + chipR + 2;
-          const chip   = this.add.circle(chipX, chipY, chipR, 0x0d0d1f, 0.85)
+          const chip   = this.add.circle(chipX, chipY, chipR, 0x0d0d1f, 0.9)
             .setStrokeStyle(1.5, def.color);
           const num    = this.add.text(chipX, chipY, `${comp.order}`, {
             fontSize: `${numSz}px`, color: '#ffffff', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 2
           }).setOrigin(0.5);
           this.tileObjects[tkey].push(lbl, chip, num);
+        }
+
+        // ── serpiente encima — translúcida sobre componentes (opaca al resolver) ──
+        const snakeAlpha = (comp && !this.solved) ? 0.5 : 1;  // deja ver el objetivo debajo
+        if (si === 0) {
+          const objs = this._dibujarCabeza(tx, ty, T, this.headDir);
+          objs.forEach(o => o.setAlpha(snakeAlpha));
+          this.tileObjects[tkey].push(...objs);
+        }
+        // cuerpo con componente
+        else if (si > 0 && sm && sm.sym) {
+          const objs = this._dibujarSimbolo(sm.sym, tcx, tcy, T * 0.28, sm.color, this.switchStates[swKey]);
+          objs.forEach(o => o.setAlpha(snakeAlpha));
+          this.tileObjects[tkey].push(...objs);
+        }
+        // cuerpo vacío (punto) — solo si NO hay sprite de cuerpo
+        else if (si > 0 && sm && !sm.sym && !cuerpoSprite) {
+          const dot = this.add.circle(tcx, tcy, T * 0.08, sm.color, 0.35);
+          this.tileObjects[tkey].push(dot);
         }
 
         // zona clickeable switch
@@ -357,12 +419,21 @@ export default class PuzzleScene extends Phaser.Scene {
   }
 
   _dibujarCabeza(tx, ty, T, dir) {
-    const objs = [];
-    const g  = this.add.graphics();
     const cx = tx + T / 2;
     const cy = ty + T / 2;
-    const m  = 2;
     const dc = dir.dc, dr = dir.dr;
+
+    // sprite de cabeza (rotado según dirección) si está disponible
+    const headKey = SpriteConfig.get('serpiente', 'cabeza');
+    if (headKey && this.textures.exists(headKey)) {
+      const ang = dc === 1 ? 0 : dc === -1 ? 180 : dr === 1 ? 90 : -90;  // arte mira a la derecha
+      const img = this.add.image(cx, cy, headKey).setDisplaySize(T, T).setAngle(ang);
+      return [img];
+    }
+
+    const objs = [];
+    const g  = this.add.graphics();
+    const m  = 2;
 
     let pts;
     if (dc === 1  && dr === 0)  pts = [[tx+m,ty+m],[tx+T*0.7,ty+m],[tx+T-m,cy],[tx+T*0.7,ty+T-m],[tx+m,ty+T-m]];
@@ -418,6 +489,15 @@ export default class PuzzleScene extends Phaser.Scene {
   }
 
   _dibujarSimbolo(sym, cx, cy, sz, color, swClosed) {
+    // sprite del componente si está disponible (placeholder → pixel art)
+    const compName = { b: 'bateria', r: 'resistencia', c: 'capacitor', l: 'led',
+                       s: swClosed ? 'switch_on' : 'switch' }[sym];
+    const spriteKey = compName && SpriteConfig.get('componentes', compName);
+    if (spriteKey && this.textures.exists(spriteKey)) {
+      const img = this.add.image(cx, cy, spriteKey).setDisplaySize(sz * 2.4, sz * 2.4);
+      return [img];
+    }
+
     const objs = [];
     const g = this.add.graphics();
     g.lineStyle(2, color, 1);
@@ -579,19 +659,21 @@ export default class PuzzleScene extends Phaser.Scene {
     const padY = isMobile ? zoneStart + (110 - padTotalH) / 2 + padTotalH / 2 : padCY;
 
     const dirs = [
-      { label: '▲', dc:  0, dr: -1, x: padX,              y: padY - btnSz - gap },
-      { label: '▼', dc:  0, dr:  1, x: padX,              y: padY + btnSz + gap },
-      { label: '◀', dc: -1, dr:  0, x: padX - btnSz - gap, y: padY },
-      { label: '▶', dc:  1, dr:  0, x: padX + btnSz + gap, y: padY },
+      { label: '▲', key: 'btn_up',    dc:  0, dr: -1, x: padX,              y: padY - btnSz - gap },
+      { label: '▼', key: 'btn_down',  dc:  0, dr:  1, x: padX,              y: padY + btnSz + gap },
+      { label: '◀', key: 'btn_left',  dc: -1, dr:  0, x: padX - btnSz - gap, y: padY },
+      { label: '▶', key: 'btn_right', dc:  1, dr:  0, x: padX + btnSz + gap, y: padY },
     ];
 
     dirs.forEach(d => {
       const btn = this.add.rectangle(d.x, d.y, btnSz, btnSz, 0x12122a)
         .setStrokeStyle(1.5, 0x2a2a5a)
         .setInteractive({ useHandCursor: true });
-      this.add.text(d.x, d.y, d.label, {
+      // flecha: sprite (ui.btn_*) o glifo de texto como fallback
+      const arr = SpriteConfig.colocar(this, 'ui', d.key, d.x, d.y, () => this.add.text(d.x, d.y, d.label, {
         fontSize: '22px', color: '#4fc3f7', fontFamily: 'monospace'
-      }).setOrigin(0.5);
+      }).setOrigin(0.5));
+      if (arr instanceof Phaser.GameObjects.Image) arr.setDisplaySize(btnSz * 1.3, btnSz * 1.3);
       btn.on('pointerdown', () => this._mover(d.dc, d.dr));
       btn.on('pointerover',  () => { btn.setFillStyle(0x1a1a3a); btn.setStrokeStyle(1.5, 0x4fc3f7); });
       btn.on('pointerout',   () => { btn.setFillStyle(0x12122a); btn.setStrokeStyle(1.5, 0x2a2a5a); });
@@ -645,8 +727,11 @@ export default class PuzzleScene extends Phaser.Scene {
     this.energyEmitter.setDepth(100);
   }
 
-  // calcula qué parte de la serpiente tiene corriente:
-  // contactIdx = índice más alto que toca la batería; se energiza 0..contactIdx
+  // calcula qué parte de la serpiente tiene corriente.
+  // contactIdx = índice más alto que toca la batería (fuente).
+  // lowerIdx   = compuerta: un SWITCH ABIERTO bajo la corriente corta el flujo en su
+  //              posición; la energía llega de la batería (contact) hasta ahí, no a la cabeza.
+  //              Al cerrarlo, la energía se libera y sigue hacia la cabeza (lowerIdx = 0).
   _calcEnergia() {
     let contact = -1;
     for (let i = 0; i < this.snake.length; i++) {
@@ -656,7 +741,18 @@ export default class PuzzleScene extends Phaser.Scene {
       }
     }
     this.contactIdx = contact;
-    this.energized  = contact >= 0;
+
+    // buscar el switch abierto más cercano a la batería (índice más alto < contact)
+    let lower = 0;
+    if (contact >= 0) {
+      for (let i = contact - 1; i >= 0; i--) {
+        const seg = this.snake[i];
+        const esSwitch = this.COMPONENTS.some(co => co.sym === 's' && co.c === seg.c && co.r === seg.r);
+        if (esSwitch && !this.switchStates[`${seg.c},${seg.r}`]) { lower = i; break; }
+      }
+    }
+    this.lowerIdx = lower;
+    this.energized = contact >= 0;
   }
 
   // anillo breve en la cabeza al moverse (sensación de paso)
@@ -683,7 +779,8 @@ export default class PuzzleScene extends Phaser.Scene {
   // reubica el emisor de energía en la cabeza y lo enciende/apaga según `energized`
   _actualizarEnergia() {
     if (!this.energyEmitter) return;
-    if (this.energized && !this.solved) {
+    // partículas en la cabeza SOLO si la energía llega hasta ahí (ningún switch la corta)
+    if (this.energized && this.lowerIdx === 0 && !this.solved) {
       const head = this.snake[0];
       const p = this._celdaCentro(head.c, head.r);
       this.energyEmitter.setPosition(p.x, p.y);
@@ -753,10 +850,19 @@ export default class PuzzleScene extends Phaser.Scene {
 
   _toggleSwitch(key) {
     if (!this.connected || this.solved) return;
+    const seCierra = !this.switchStates[key];
     this.switchStates[key] = !this.switchStates[key];
+
+    // al cerrar, la energía se libera y fluye más allá del switch → chispazo
+    if (seCierra) {
+      const [c, r] = key.split(',').map(Number);
+      this._chispazo(c, r, 0x4fc3f7);
+    }
+
+    this._calcEnergia();  // recalcular la compuerta de energía
     const allClosed = Object.values(this.switchStates).every(v => v === true);
     if (allClosed) this._ganar();
-    else { this._dibujarGrid(); this._actualizarStatus(); }
+    else { this._dibujarGrid(); this._actualizarEnergia(); this._actualizarStatus(); }
   }
 
   _mover(dc, dr) {
@@ -815,6 +921,10 @@ export default class PuzzleScene extends Phaser.Scene {
     const eraPrimera = !GameState.nivelesCompletados.includes(this.nivelIdx);
     const ganados    = GameState.completarNivel(this.nivelIdx, puntos);  // 0 si no mejoró
     const mejor      = GameState.mejorPuntaje[this.nivelIdx] || puntos;
+    // estrellas: 3 = óptimo, 2 = hasta +25%, 1 = completado
+    const estrellas  = this.moveCount <= this.OPTIMO ? 3
+                     : this.moveCount <= Math.ceil(this.OPTIMO * 1.25) ? 2 : 1;
+    const mejorEstr  = GameState.registrarEstrellas(this.nivelIdx, estrellas);
     this._dibujarGrid();
     this._celebrar();
 
@@ -823,14 +933,54 @@ export default class PuzzleScene extends Phaser.Scene {
     const panelW = Math.min(320, CTRL_X - 40);
     const panelX = (CTRL_X - panelW) / 2 + panelW / 2;
 
-    this.add.rectangle(panelX, height / 2, panelW, 200, 0x080814, 0.97)
-      .setStrokeStyle(2, 0x4caf50);
-    this.add.text(panelX, height / 2 - 70, '¡CIRCUITO COMPLETO!', {
+    // todos los objetos del panel se registran para poder cerrarlo con la X
+    const panelObjs = [];
+    const reg = o => { panelObjs.push(o); return o; };
+
+    reg(this.add.rectangle(panelX, height / 2, panelW, 218, 0x080814, 0.97)
+      .setStrokeStyle(2, 0x4caf50));
+    reg(this.add.text(panelX, height / 2 - 88, '¡CIRCUITO COMPLETO!', {
       fontSize: '17px', color: '#4caf50', fontFamily: 'monospace'
-    }).setOrigin(0.5);
-    this.add.text(panelX, height / 2 - 40, `movimientos: ${this.moveCount}`, {
-      fontSize: '12px', color: '#888', fontFamily: 'monospace'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5));
+
+    // ── botón X — cerrar el panel para ver la solución ──
+    const cerrar = reg(this.add.text(panelX + panelW / 2 - 16, height / 2 - 109 + 15, '✕', {
+      fontSize: '16px', color: '#888', fontFamily: 'monospace'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+    cerrar.on('pointerover', () => cerrar.setColor('#ef5350'));
+    cerrar.on('pointerout',  () => cerrar.setColor('#888'));
+    cerrar.on('pointerdown', () => panelObjs.forEach(o => o.destroy()));
+
+    // ── estrellas (★ ganadas en esta partida) — sprite o glifo ──
+    const fillKey = SpriteConfig.get('ui', 'estrella_llena');
+    if (fillKey && this.textures.exists(fillKey)) {
+      const sz = 28, gap = 8, total = 3 * sz + 2 * gap;
+      const sx = panelX - total / 2 + sz / 2;
+      for (let i = 0; i < 3; i++) {
+        const name = i < estrellas ? 'estrella_llena' : 'estrella_vacia';
+        const im = SpriteConfig.colocar(this, 'ui', name, sx + i * (sz + gap), height / 2 - 60, null);
+        if (im) {
+          reg(im).setDisplaySize(sz, sz).setAlpha(0);
+          this.tweens.add({ targets: im, alpha: 1, duration: 300, delay: i * 80, ease: 'Back.easeOut' });
+        }
+      }
+    } else {
+      const starStr = '★'.repeat(estrellas) + '☆'.repeat(3 - estrellas);
+      const star = reg(this.add.text(panelX, height / 2 - 60, starStr, {
+        fontSize: '30px', color: '#fff176', fontFamily: 'monospace'
+      }).setOrigin(0.5));
+      star.setScale(0.4); star.setAlpha(0);
+      this.tweens.add({ targets: star, scale: 1, alpha: 1, duration: 350, ease: 'Back.easeOut' });
+    }
+    if (mejorEstr > estrellas) {
+      reg(this.add.text(panelX, height / 2 - 40, `mejor: ${'★'.repeat(mejorEstr)}`, {
+        fontSize: '10px', color: '#888', fontFamily: 'monospace'
+      }).setOrigin(0.5));
+    }
+
+    reg(this.add.text(panelX, height / 2 - 24, `movimientos: ${this.moveCount}  ·  óptimo: ${this.OPTIMO}`, {
+      fontSize: '11px', color: '#888', fontFamily: 'monospace'
+    }).setOrigin(0.5));
     // puntaje otorgado — distingue primera vez / récord mejorado / sin mejora
     let scoreTxt, scoreCol, scoreSz;
     if (ganados > 0 && eraPrimera) {
@@ -840,9 +990,9 @@ export default class PuzzleScene extends Phaser.Scene {
     } else {
       scoreTxt = `sin mejora · tu récord: ${mejor} pts`; scoreCol = '#888'; scoreSz = '12px';
     }
-    this.add.text(panelX, height / 2 - 16, scoreTxt, {
+    reg(this.add.text(panelX, height / 2 - 2, scoreTxt, {
       fontSize: scoreSz, color: scoreCol, fontFamily: 'monospace'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5));
 
     const siguienteIdx = this.nivelIdx + 1;
     const sigPack      = packRequerido(siguienteIdx);
@@ -850,26 +1000,31 @@ export default class PuzzleScene extends Phaser.Scene {
     const hayMas = siguienteIdx < LEVELS.length && GameState.puedeJugarHoy();
 
     if (hayMas && !sigBloqueado) {
-      const btnSig = this.add.text(panelX, height / 2 + 30, '[ siguiente nivel ]', {
+      const btnSig = reg(this.add.text(panelX, height / 2 + 30, '[ siguiente nivel ]', {
         fontSize: '13px', color: '#4fc3f7', fontFamily: 'monospace'
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
       btnSig.on('pointerdown', () => this.scene.start('PuzzleScene', { nivelIdx: siguienteIdx }));
     } else if (hayMas && sigBloqueado) {
-      const btnTienda = this.add.text(panelX, height / 2 + 30, '[ desbloquear en la tienda 🛒 ]', {
+      const btnTienda = reg(this.add.text(panelX, height / 2 + 30, '[ desbloquear en la tienda 🛒 ]', {
         fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
       btnTienda.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
     } else {
       const msg = !GameState.puedeJugarHoy() ? '¡completaste tus niveles de hoy!' : '¡completaste todos los niveles!';
-      this.add.text(panelX, height / 2 + 30, msg, {
+      reg(this.add.text(panelX, height / 2 + 30, msg, {
         fontSize: '11px', color: '#888', fontFamily: 'monospace'
-      }).setOrigin(0.5);
+      }).setOrigin(0.5));
     }
 
-    const btnSalir = this.add.text(panelX, height / 2 + 62, '[ volver al cuarto ]', {
+    const btnSalir = reg(this.add.text(panelX, height / 2 + 62, '[ volver al cuarto ]', {
       fontSize: '11px', color: '#444', fontFamily: 'monospace'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
     btnSalir.on('pointerdown', () => this.scene.start('RoomScene'));
+
+    // pista para reabrir el resumen tras cerrar con la X
+    reg(this.add.text(panelX, height / 2 + 84, '(✕ cierra · R reinicia)', {
+      fontSize: '9px', color: '#444', fontFamily: 'monospace'
+    }).setOrigin(0.5));
   }
 
   _actualizarStatus() {

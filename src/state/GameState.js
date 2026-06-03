@@ -9,6 +9,7 @@ const GameState = {
   puntosTotal: 0,
   nivelesCompletados: [],   // [0,1,2,...] índices completados
   mejorPuntaje: {},         // { nivelIdx: mejorPuntajeLogrado } — para premiar mejoras
+  estrellas: {},            // { nivelIdx: mejoresEstrellas (1-3) } — maestría por nivel
   ultimoNivelDesbloqueado: 0,
 
   // ── tienda ──
@@ -70,6 +71,18 @@ const GameState = {
     return idx <= this.ultimoNivelDesbloqueado;
   },
 
+  // ── estrellas (maestría por nivel) ──
+  // guarda el mejor número de estrellas logrado y lo devuelve
+  registrarEstrellas(nivelIdx, estrellas) {
+    const prev = this.estrellas[nivelIdx] || 0;
+    if (estrellas > prev) { this.estrellas[nivelIdx] = estrellas; this._guardar(); }
+    return Math.max(prev, estrellas);
+  },
+
+  totalEstrellas() {
+    return Object.values(this.estrellas).reduce((a, b) => a + b, 0);
+  },
+
   puedeJugarHoy() {
     return this.nivelesHoy < this.MAX_NIVELES_DIA + this.energiaExtraHoy;
   },
@@ -127,6 +140,7 @@ const GameState = {
       username:               this.username,
       puntosTotal:            this.puntosTotal,
       mejorPuntaje:           this.mejorPuntaje,
+      estrellas:              this.estrellas,
       monedas:                this.monedas,
       desbloqueos:            this.desbloqueos,
       energiaExtraHoy:        this.energiaExtraHoy,
@@ -146,6 +160,7 @@ const GameState = {
       const data = JSON.parse(raw);
       this.puntosTotal             = data.puntosTotal             || 0;
       this.mejorPuntaje            = data.mejorPuntaje            || {};
+      this.estrellas               = data.estrellas               || {};
       // retro-compat: perfiles viejos arrancan con monedas = su récord
       this.monedas                 = data.monedas ?? data.puntosTotal ?? 0;
       this.desbloqueos             = data.desbloqueos             || [];

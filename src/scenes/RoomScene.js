@@ -1,6 +1,6 @@
 import GameState    from '../state/GameState.js';
 import SpriteConfig from '../SpriteConfig.js';
-import { packRequerido } from '../levels.js';
+import { LEVELS, packRequerido } from '../levels.js';
 
 export default class RoomScene extends Phaser.Scene {
   constructor() { super('RoomScene'); }
@@ -9,19 +9,17 @@ export default class RoomScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const S = SpriteConfig;
 
-    // ── fondo / background ──
-    if (S.get('cuarto', 'bg')) {
-      this.add.image(0, 0, S.get('cuarto', 'bg')).setOrigin(0).setDisplaySize(width, height);
+    // ── fondo / background (placeholder → pixel art) ──
+    const bgKey = S.get('cuarto', 'bg');
+    if (bgKey && this.textures.exists(bgKey)) {
+      this.add.image(0, 0, bgKey).setOrigin(0).setDisplaySize(width, height);
     } else {
       this._dibujarCuartoPlaceholder(width, height);
     }
 
     // ── workbench ──
     const WB_X = 600, WB_Y = 100;
-    if (S.get('cuarto', 'workbench')) {
-      const cfg = S.cuarto.workbench;
-      this.add.image(WB_X, WB_Y, cfg.key).setOrigin(0.5).setScale(cfg.escala);
-    }
+    S.colocar(this, 'cuarto', 'workbench', WB_X, WB_Y, null);
     // label y hint siempre visibles
     this.add.text(WB_X, WB_Y + 55, '⚡ WORKBENCH', {
       fontSize: '11px', color: '#a5d6a7', fontFamily: 'monospace'
@@ -39,12 +37,8 @@ export default class RoomScene extends Phaser.Scene {
 
     // ── tienda ──
     const TIENDA_X = 380, TIENDA_Y = 120;
-    if (S.get('cuarto', 'tienda')) {
-      const cfg = S.cuarto.tienda;
-      this.add.image(TIENDA_X, TIENDA_Y, cfg.key).setOrigin(0.5).setScale(cfg.escala);
-    } else {
-      this._dibujarTiendaPlaceholder(TIENDA_X, TIENDA_Y);
-    }
+    S.colocar(this, 'cuarto', 'tienda', TIENDA_X, TIENDA_Y,
+      () => this._dibujarTiendaPlaceholder(TIENDA_X, TIENDA_Y));
     this.add.text(TIENDA_X, TIENDA_Y + 55, '🛒 TIENDA', {
       fontSize: '11px', color: '#fff176', fontFamily: 'monospace'
     }).setOrigin(0.5);
@@ -58,10 +52,7 @@ export default class RoomScene extends Phaser.Scene {
     });
 
     // ── escritorio ──
-    if (S.get('cuarto', 'escritorio')) {
-      const cfg = S.cuarto.escritorio;
-      this.add.image(160, 120, cfg.key).setOrigin(0.5).setScale(cfg.escala);
-    }
+    S.colocar(this, 'cuarto', 'escritorio', 160, 120, null);
 
     // ── muebles comprados ──
     this._dibujarMuebles(S);
@@ -202,9 +193,8 @@ export default class RoomScene extends Phaser.Scene {
         const tipo = id.replace('mueble_', '');
         const pos  = posMueble[tipo];
         if (!pos) return;
-        const key = S.get('muebles', tipo);
-        if (key) this.add.image(pos.x, pos.y, key).setOrigin(0.5).setScale(S.muebles[tipo].escala);
-        else     this._dibujarMueblePlaceholder(tipo, pos.x, pos.y);
+        S.colocar(this, 'muebles', tipo, pos.x, pos.y,
+          () => this._dibujarMueblePlaceholder(tipo, pos.x, pos.y));
       });
   }
 
@@ -241,12 +231,16 @@ export default class RoomScene extends Phaser.Scene {
       fontSize: '12px', color: '#4fc3f7', fontFamily: 'monospace'
     }).setOrigin(0, 0.5);
 
-    this.txtPuntos = this.add.text(width / 2 - 70, 15, `★ ${GameState.puntosTotal} pts`, {
+    this.txtPuntos = this.add.text(width / 2 - 110, 15, `★ ${GameState.puntosTotal} pts`, {
       fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
     }).setOrigin(0.5, 0.5);
 
-    this.txtMonedas = this.add.text(width / 2 + 70, 15, `🪙 ${GameState.monedas}`, {
+    this.txtMonedas = this.add.text(width / 2, 15, `🪙 ${GameState.monedas}`, {
       fontSize: '12px', color: '#ffd54f', fontFamily: 'monospace'
+    }).setOrigin(0.5, 0.5);
+
+    this.add.text(width / 2 + 110, 15, `⭐ ${GameState.totalEstrellas()}/${LEVELS.length * 3}`, {
+      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
     }).setOrigin(0.5, 0.5);
 
     const restantes = GameState.nivelesRestantesHoy();
@@ -391,10 +385,10 @@ export default class RoomScene extends Phaser.Scene {
     const bx = 80, by = height - 80;
 
     const dirs = [
-      { label: '▲', vx:  0,  vy: -1, x: bx,           y: by - btnSz - gap },
-      { label: '▼', vx:  0,  vy:  1, x: bx,           y: by + btnSz + gap },
-      { label: '◀', vx: -1,  vy:  0, x: bx - btnSz - gap, y: by },
-      { label: '▶', vx:  1,  vy:  0, x: bx + btnSz + gap, y: by },
+      { label: '▲', key: 'btn_up',    vx:  0,  vy: -1, x: bx,           y: by - btnSz - gap },
+      { label: '▼', key: 'btn_down',  vx:  0,  vy:  1, x: bx,           y: by + btnSz + gap },
+      { label: '◀', key: 'btn_left',  vx: -1,  vy:  0, x: bx - btnSz - gap, y: by },
+      { label: '▶', key: 'btn_right', vx:  1,  vy:  0, x: bx + btnSz + gap, y: by },
     ];
 
     dirs.forEach(d => {
@@ -402,9 +396,11 @@ export default class RoomScene extends Phaser.Scene {
         .setStrokeStyle(1.5, 0x2a2a5a)
         .setInteractive({ useHandCursor: true })
         .setDepth(10);
-      this.add.text(d.x, d.y, d.label, {
+      // flecha: sprite (ui.btn_*) o glifo de texto como fallback
+      const arr = SpriteConfig.colocar(this, 'ui', d.key, d.x, d.y, () => this.add.text(d.x, d.y, d.label, {
         fontSize: '22px', color: '#4fc3f7', fontFamily: 'monospace'
-      }).setOrigin(0.5).setDepth(11);
+      }).setOrigin(0.5)).setDepth(11);
+      if (arr instanceof Phaser.GameObjects.Image) arr.setDisplaySize(btnSz * 0.7, btnSz * 0.7);
 
       // touch — mantener presionado mueve continuamente
       btn.on('pointerdown', () => {

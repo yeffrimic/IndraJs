@@ -1,4 +1,5 @@
 import GameState        from '../state/GameState.js';
+import SpriteConfig     from '../SpriteConfig.js';
 import { TIENDA_CATS, itemsDe } from '../tienda.js';
 
 export default class StoreScene extends Phaser.Scene {
@@ -12,8 +13,8 @@ export default class StoreScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.isMobile = window.isMobile || false;
 
-    // ── fondo ──
-    this.add.rectangle(0, 0, width, height, 0x0d0d1f).setOrigin(0);
+    // ── fondo (placeholder → pixel art) ──
+    SpriteConfig.fondo(this, 'store', width, height, 0x0d0d1f);
 
     // ── barra superior (HUD) ──
     const HUD_H = this.isMobile ? 32 : 40;
@@ -138,9 +139,10 @@ export default class StoreScene extends Phaser.Scene {
       .setStrokeStyle(1, comprado ? 0x4caf50 : 0x2a2a4a);
     this.itemObjects.push(bg);
 
-    // ícono (placeholder emoji — futuro: SpriteConfig)
-    const ico = this.add.text(x + 14, y + 12, item.icono, { fontSize: '22px' }).setOrigin(0, 0);
-    this.itemObjects.push(ico);
+    // ícono: sprite del mueble si lo hay, si no el emoji placeholder
+    const ico = SpriteConfig.colocar(this, 'muebles', item.mueble, x + 26, y + 24,
+      () => this.add.text(x + 14, y + 12, item.icono, { fontSize: '22px' }).setOrigin(0, 0));
+    if (ico) { if (item.mueble) ico.setDisplaySize?.(28, 28); this.itemObjects.push(ico); }
 
     // nombre
     const nom = this.add.text(x + 46, y + 14, item.nombre, {

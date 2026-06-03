@@ -18,6 +18,9 @@ export default class BootScene extends Phaser.Scene {
       txt.setText(`cargando... ${Math.floor(v * 100)}%`);
     });
 
+    // carga tolerante: los assets faltantes se ignoran (caen al dibujo vectorial)
+    this.load.on('loaderror', () => { /* asset ausente — se usa el placeholder vectorial */ });
+
     // solo carga assets si USE_SPRITES está activo
     if (SpriteConfig.activo()) {
       const { images, spritesheets } = SpriteConfig.listarParaCargar();
@@ -54,6 +57,21 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
+    // ── atajo de desarrollo ──
+    // ?nivel=N  → entra directo a ese puzzle (perfil "Dev", sin login ni caminata)
+    // ?sel      → entra directo al selector de niveles
+    const params = new URLSearchParams(location.search);
+    if (params.has('nivel') || params.has('sel')) {
+      GameState.login('Dev');
+      GameState.ultimoNivelDesbloqueado = Math.max(GameState.ultimoNivelDesbloqueado, 99);  // todo desbloqueado para testear
+      if (params.has('sel')) {
+        this.scene.start('LevelSelectScene');
+      } else {
+        const idx = parseInt(params.get('nivel'), 10) || 0;
+        this.scene.start('PuzzleScene', { nivelIdx: idx });
+      }
+      return;
+    }
     this.scene.start('LoginScene');
   }
 }

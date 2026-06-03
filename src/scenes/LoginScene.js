@@ -1,4 +1,5 @@
-import GameState from '../state/GameState.js';
+import GameState    from '../state/GameState.js';
+import SpriteConfig from '../SpriteConfig.js';
 
 const PERFILES = [
   { nombre: 'Yeffri',       color: 0x4fc3f7 },
@@ -17,8 +18,8 @@ export default class LoginScene extends Phaser.Scene {
     const cx = width / 2;
     const isMobile = window.isMobile || false;
 
-    // fondo
-    this.add.rectangle(0, 0, width, height, 0x0d0d1f).setOrigin(0);
+    // fondo (placeholder → pixel art vía SpriteConfig)
+    SpriteConfig.fondo(this, 'login', width, height, 0x0d0d1f);
 
     if (isMobile) {
       this._crearLayoutMobile(width, height, cx);

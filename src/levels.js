@@ -265,3 +265,25 @@ export function packRequerido(idx) {
   const lvl = LEVELS[idx];
   return lvl && lvl.pack ? `pack_${lvl.pack}` : null;
 }
+
+// ── currículo: tiers de dificultad con subdivisiones (conceptos a aprender) ──
+// agrupa índices de LEVELS; el selector de niveles lo consume.
+export const TIERS = [
+  { id: 'principiante', nombre: 'Principiante', color: 0xa5d6a7, conceptos: [
+    { nombre: 'Tu primer circuito', aprende: 'conectar batería → resistencia → LED', niveles: [0] },
+    { nombre: 'Caminos en diagonal', aprende: 'guiar la corriente en diagonal',       niveles: [1] },
+    { nombre: 'Varias resistencias',  aprende: 'varios componentes en serie',          niveles: [2] },
+    { nombre: 'El capacitor',         aprende: 'sumar un capacitor al camino',         niveles: [3] },
+  ]},
+  { id: 'intermedio', nombre: 'Intermedio', color: 0x4fc3f7, conceptos: [
+    { nombre: 'El interruptor',    aprende: 'abrir y cerrar el paso con un switch', niveles: [4] },
+    { nombre: 'Rutas en zigzag',   aprende: 'recorridos con vueltas',               niveles: [5] },
+    { nombre: 'Recorridos largos', aprende: 'planear caminos extensos',             niveles: [6] },
+  ]},
+  { id: 'avanzado', nombre: 'Avanzado', color: 0xce93d8, conceptos: [
+    { nombre: 'Dos interruptores', aprende: 'manejar varios switches',        niveles: [7] },
+    { nombre: 'Circuito completo', aprende: 'combinar todos los componentes', niveles: [8, 9] },
+    { nombre: 'Tableros grandes',  aprende: 'circuitos en grids amplios',     niveles: [10, 11, 12] },
+    { nombre: 'Circuitos paralelos', aprende: 'ramificar la corriente', niveles: [], proximamente: true },
+  ]},
+];

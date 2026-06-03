@@ -7,7 +7,24 @@
 const SpriteConfig = {
 
   // ── flag principal ──
-  USE_SPRITES: false,
+  USE_SPRITES: true,
+
+  // ── fondos de cada escena ──
+  fondos: {
+    login:  { key: 'fondo_login',  path: 'assets/fondos/login.png'  },
+    room:   { key: 'fondo_room',   path: 'assets/fondos/room.png'   },
+    puzzle: { key: 'fondo_puzzle', path: 'assets/fondos/puzzle.png' },
+    store:  { key: 'fondo_store',  path: 'assets/fondos/store.png'  },
+    select: { key: 'fondo_select', path: 'assets/fondos/select.png' },
+  },
+
+  // ── cuadros del grid del puzzle ──
+  grid: {
+    tile:      { key: 'tile',      path: 'assets/grid/tile.png'      },
+    tile_head: { key: 'tile_head', path: 'assets/grid/tile_head.png' },
+    tile_body: { key: 'tile_body', path: 'assets/grid/tile_body.png' },
+    tile_goal: { key: 'tile_goal', path: 'assets/grid/tile_goal.png' },
+  },
 
   // ── personaje ──
   personaje: {
@@ -66,6 +83,12 @@ const SpriteConfig = {
     btn_down:  { key: 'btn_down',  path: 'assets/ui/btn_down.png',  escala: 1 },
     btn_left:  { key: 'btn_left',  path: 'assets/ui/btn_left.png',  escala: 1 },
     btn_right: { key: 'btn_right', path: 'assets/ui/btn_right.png', escala: 1 },
+    estrella_llena: { key: 'estrella_llena', path: 'assets/ui/estrella_llena.png', escala: 1 },
+    estrella_vacia: { key: 'estrella_vacia', path: 'assets/ui/estrella_vacia.png', escala: 1 },
+    moneda:    { key: 'moneda',    path: 'assets/ui/moneda.png',    escala: 1 },
+    energia:   { key: 'energia',   path: 'assets/ui/energia.png',   escala: 1 },
+    candado:   { key: 'candado',   path: 'assets/ui/candado.png',   escala: 1 },
+    pista:     { key: 'pista',     path: 'assets/ui/pista.png',     escala: 1 },
   },
 
   // ── helpers ──
@@ -81,6 +104,34 @@ const SpriteConfig = {
     return this[categoria]?.[nombre]?.key || null;
   },
 
+  // escala configurada de un asset (default 1)
+  escalaDe(categoria, nombre) {
+    return this[categoria]?.[nombre]?.escala ?? 1;
+  },
+
+  // categorías que son imágenes simples (para precarga genérica y helper)
+  CATS_IMAGEN: ['fondos', 'grid', 'cuarto', 'muebles', 'componentes', 'serpiente', 'ui'],
+
+  // Coloca un sprite si está disponible Y cargado; si no, ejecuta el dibujo vectorial.
+  // Centraliza el patrón placeholder→pixel-art. Devuelve lo que se haya creado.
+  //   SpriteConfig.colocar(scene, 'fondos', 'puzzle', x, y, () => scene.add.rectangle(...))
+  colocar(scene, categoria, nombre, x, y, fallbackFn) {
+    const key = this.get(categoria, nombre);
+    if (key && scene.textures.exists(key)) {
+      return scene.add.image(x, y, key).setScale(this.escalaDe(categoria, nombre));
+    }
+    return fallbackFn ? fallbackFn() : null;
+  },
+
+  // Fondo de pantalla completa: imagen estirada a (width,height) o un rectángulo de color.
+  fondo(scene, nombre, width, height, colorFallback) {
+    const key = this.get('fondos', nombre);
+    if (key && scene.textures.exists(key)) {
+      return scene.add.image(0, 0, key).setOrigin(0).setDisplaySize(width, height);
+    }
+    return scene.add.rectangle(0, 0, width, height, colorFallback).setOrigin(0);
+  },
+
   // lista todos los assets a precargar según USE_SPRITES
   listarParaCargar() {
     if (!this.USE_SPRITES) return { images: [], spritesheets: [], audio: [] };
@@ -88,29 +139,11 @@ const SpriteConfig = {
     const images = [];
     const spritesheets = [];
 
-    // cuarto
-    Object.values(this.cuarto).forEach(a => {
-      images.push({ key: a.key, path: a.path });
-    });
-
-    // muebles
-    Object.values(this.muebles).forEach(a => {
-      images.push({ key: a.key, path: a.path });
-    });
-
-    // componentes
-    Object.values(this.componentes).forEach(a => {
-      images.push({ key: a.key, path: a.path });
-    });
-
-    // serpiente
-    Object.values(this.serpiente).forEach(a => {
-      images.push({ key: a.key, path: a.path });
-    });
-
-    // ui
-    Object.values(this.ui).forEach(a => {
-      images.push({ key: a.key, path: a.path });
+    // todas las categorías de imágenes simples (genérico: agregar un asset lo precarga solo)
+    this.CATS_IMAGEN.forEach(cat => {
+      Object.values(this[cat] || {}).forEach(a => {
+        if (a && a.key && a.path) images.push({ key: a.key, path: a.path });
+      });
     });
 
     // personaje como spritesheet
