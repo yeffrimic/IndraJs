@@ -1,5 +1,5 @@
 import GameState    from '../state/GameState.js';
-import SpriteConfig from '../SpriteConfig.js';
+import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 
 const PERFILES = [
   { nombre: 'Yeffri',       color: 0x4fc3f7 },
@@ -28,8 +28,8 @@ export default class LoginScene extends Phaser.Scene {
     }
 
     // versión
-    this.add.text(cx, height - 10, 'v0.1 — circuito puzzle · creabot', {
-      fontSize: '10px', color: '#2a2a4a', fontFamily: 'monospace'
+    this.add.text(cx, height - 10, 'v0.7 — circuito puzzle · creabot', {
+      fontSize: '10px', color: '#2a2a4a', fontFamily: FUENTE
     }).setOrigin(0.5, 1);
   }
 
@@ -38,11 +38,11 @@ export default class LoginScene extends Phaser.Scene {
     const cy = height / 2;
 
     this.add.text(cx, 80, 'CIRCUITO PUZZLE', {
-      fontSize: '28px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '28px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5);
 
     this.add.text(cx, 118, '¿quién está jugando?', {
-      fontSize: '13px', color: '#555', fontFamily: 'monospace'
+      fontSize: '13px', color: '#555', fontFamily: FUENTE
     }).setOrigin(0.5);
 
     const cols = 3, btnW = 180, btnH = 70, gapX = 20, gapY = 16;
@@ -63,11 +63,11 @@ export default class LoginScene extends Phaser.Scene {
   _crearLayoutMobile(width, height, cx) {
     // título arriba centrado pequeño
     this.add.text(cx, 28, 'CIRCUITO PUZZLE', {
-      fontSize: '16px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '16px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
 
     this.add.text(cx, 50, '¿quién está jugando?', {
-      fontSize: '11px', color: '#555', fontFamily: 'monospace'
+      fontSize: '11px', color: '#555', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
 
     // 3 columnas x 2 filas compactas
@@ -100,16 +100,16 @@ export default class LoginScene extends Phaser.Scene {
       .setStrokeStyle(2, perfil.color);
 
     this.add.text(x - btnW * 0.28, y, perfil.nombre[0].toUpperCase(), {
-      fontSize: '16px', color: col, fontFamily: 'monospace'
+      fontSize: '16px', color: col, fontFamily: FUENTE
     }).setOrigin(0.5);
 
     this.add.text(x + btnW * 0.08, y - 9, perfil.nombre, {
-      fontSize: '13px', color: '#ccc', fontFamily: 'monospace'
+      fontSize: '13px', color: '#ccc', fontFamily: FUENTE
     }).setOrigin(0, 0.5);
 
     const pts = this._getPuntos(perfil.nombre);
     this.add.text(x + btnW * 0.08, y + 10, pts > 0 ? `★ ${pts} pts` : 'nuevo', {
-      fontSize: '10px', color: pts > 0 ? '#fff176' : '#444', fontFamily: 'monospace'
+      fontSize: '10px', color: pts > 0 ? '#fff176' : '#444', fontFamily: FUENTE
     }).setOrigin(0, 0.5);
 
     bg.on('pointerover',  () => { bg.setFillStyle(0x1a1a3a); bg.setStrokeStyle(1.5, perfil.color); });
@@ -130,18 +130,18 @@ export default class LoginScene extends Phaser.Scene {
     this.add.circle(x, y - btnH * 0.18, r, perfil.color, 0.15)
       .setStrokeStyle(2, perfil.color);
     this.add.text(x, y - btnH * 0.18, perfil.nombre[0].toUpperCase(), {
-      fontSize: `${Math.floor(r * 0.9)}px`, color: col, fontFamily: 'monospace'
+      fontSize: `${Math.floor(r * 0.9)}px`, color: col, fontFamily: FUENTE
     }).setOrigin(0.5);
 
     // nombre
     this.add.text(x, y + btnH * 0.1, perfil.nombre, {
-      fontSize: '11px', color: '#ccc', fontFamily: 'monospace'
+      fontSize: '11px', color: '#ccc', fontFamily: FUENTE
     }).setOrigin(0.5);
 
     // puntos
     const pts = this._getPuntos(perfil.nombre);
     this.add.text(x, y + btnH * 0.32, pts > 0 ? `★ ${pts} pts` : 'nuevo', {
-      fontSize: '10px', color: pts > 0 ? '#fff176' : '#444', fontFamily: 'monospace'
+      fontSize: '10px', color: pts > 0 ? '#fff176' : '#444', fontFamily: FUENTE
     }).setOrigin(0.5);
 
     bg.on('pointerover',  () => { bg.setFillStyle(0x1a1a3a); bg.setStrokeStyle(1.5, perfil.color); });

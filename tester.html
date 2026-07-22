@@ -2,6 +2,17 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<!-- herramienta de desarrollo: sólo disponible en localhost (ver src/dev-guard.js) -->
+<script src="src/dev-guard.js"></script>
+<script>
+if (!window.__DEV__) {
+  document.documentElement.innerHTML =
+    '<body style="background:#0d0d1f;color:#4fc3f7;font-family:sans-serif;font-size:15px;' +
+    'display:flex;align-items:center;justify-content:center;height:100vh;margin:0">' +
+    'herramienta de desarrollo</body>';
+  throw new Error('herramienta de desarrollo — no disponible fuera de localhost');
+}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Probador de Niveles</title>
 <style>

@@ -1,5 +1,5 @@
 import GameState    from '../state/GameState.js';
-import SpriteConfig from '../SpriteConfig.js';
+import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import { LEVELS, packRequerido } from '../levels.js';
 
 export default class PuzzleScene extends Phaser.Scene {
@@ -20,8 +20,30 @@ export default class PuzzleScene extends Phaser.Scene {
     this.COMPONENTS = this._parseComponents(this.grid);
     this._calcularSerpiente();
 
+    // esquina por la que entra la serpiente (ver _buildInitialSnake) — varía por nivel
+    this.NACE = levelData.nace || 'ne';
+
     this.snake        = this._buildInitialSnake();
     this.moveCount    = 0;
+
+    // ── reloj del nivel ──
+    // Date.now() y no this.time: hay que medir tiempo real del chico, y el reloj
+    // de la escena se pausa si el navegador manda la pestaña a segundo plano.
+    this.tiempoInicio   = Date.now();
+    this.tiempoFin      = null;
+    this._ultimoSegundo = -1;
+
+    // ── guía visual del orden ──
+    // proximoComp = el componente al que la cabeza tiene que ir AHORA. Arranca en
+    // la batería (siempre la primera) y avanza sola cuando la cabeza la pisa, así
+    // el chico aprende la secuencia recorriéndola en vez de leyendo números.
+    this.proximoComp  = 0;
+    this.celdaEntrada = { ...this.snake[0] };   // por dónde entró (para el camino)
+
+    // Los primeros niveles muestran el camino gratis: ahí el chico todavía no sabe
+    // que los componentes van en un orden. Después se paga con una pista.
+    this.NIVELES_CON_CAMINO = 5;
+    this.mostrarCamino = this.nivelIdx < this.NIVELES_CON_CAMINO;
     this.connected    = false;
     this.solved       = false;
     this.headDir      = { dc: 1, dr: 0 };
@@ -40,14 +62,24 @@ export default class PuzzleScene extends Phaser.Scene {
     this._alineadosPrev = new Set();        // componentes ya alineados (para detectar nuevos)
     this._calcEnergia();
 
-    // óptimo exacto de pasos = (largo-1) + distancia del nacimiento a la batería.
-    // (la cabeza debe llegar a la batería y luego trazar todo el cuerpo; validado por BFS)
-    const head0  = this.snake[0];           // nacimiento de la serpiente (aún sin moverse)
+    // Óptimo de pasos (la marca de las 3 estrellas):
+    //   pasos para que la cabeza llegue a la batería + los que tarda el cuerpo en
+    //   terminar de trazarse detrás (la batería va en el índice len-2).
+    // Naciendo la serpiente colapsada en una casilla no hay cuerpo que estorbe, así
+    // que ese primer tramo es la distancia en línea recta y la cuenta cierra.
+    //
+    // Igual cada nivel trae su `optimo` ya medido resolviéndolo fuera de línea: la
+    // cuenta puede quedarse corta si el recorrido entre componentes se cruza consigo
+    // mismo y obliga a un desvío. La fórmula queda de respaldo para niveles nuevos
+    // (p. ej. recién dibujados en el editor): como es una cota inferior, a lo sumo
+    // regala estrellas, nunca las vuelve imposibles.
+    const head0  = this.snake[0];
     const bat    = this.bateriaCells[0];
-    const idxBat = this.SNAKE_MAP.findIndex(sm => sm.sym === 'b');  // ahora en len-2 (no el último)
-    this.OPTIMO = (bat && idxBat >= 0)
-      ? idxBat + Math.abs(head0.c - bat.c) + Math.abs(head0.r - bat.r)
-      : this.SNAKE_LENGTH;
+    const idxBat = this.SNAKE_MAP.findIndex(sm => sm.sym === 'b');  // en len-2 (no el último)
+    this.OPTIMO = levelData.optimo
+      || ((bat && idxBat >= 0)
+        ? idxBat + Math.abs(head0.c - bat.c) + Math.abs(head0.r - bat.r)
+        : this.SNAKE_LENGTH);
 
     // ── zonas fijas ──
     const isMobile = window.isMobile || false;
@@ -93,6 +125,7 @@ export default class PuzzleScene extends Phaser.Scene {
     this.tileGraphics = this.add.graphics();
     this.tileObjects  = {};
     this._dibujarGrid();
+    this._dibujarCamino();
     this._crearHintBar(height - HINT_H + 4, CTRL_X);
     this._crearControles(CTRL_X, width, HUD_H, height);
 
@@ -106,7 +139,7 @@ export default class PuzzleScene extends Phaser.Scene {
     const statusY = isMobile ? height - HINT_H + 6 : HUD_H + 14;
     this.statusTxt = this.add.text(statusX, statusY, '', {
       fontSize: isMobile ? '10px' : '12px',
-      color: '#888', fontFamily: 'monospace',
+      color: '#888', fontFamily: FUENTE,
       wordWrap: { width: isMobile ? width / 2 : CTRL_W - 16 },
       align: 'center'
     }).setOrigin(0.5, 0);
@@ -190,15 +223,28 @@ export default class PuzzleScene extends Phaser.Scene {
     this.SNAKE_MAP[0] = { comp: null, color: 0x4fc3f7, sym: null, label: null, order: null };
   }
 
+  // La serpiente nace ENTERA en una sola casilla: al principio sólo se ve la
+  // cabeza, y el cuerpo va saliendo de ahí a medida que avanza, como si entrara
+  // al tablero por ese punto.
+  //
+  // No es sólo estético, resuelve el problema de raíz. Antes nacía desplegada y
+  // plegada sobre el tablero, y eso traía tres males:
+  //   - se tapaba a sí misma el camino (con el cuerpo ocupando medio tablero,
+  //     muchos niveles quedaban sin solución posible)
+  //   - obligaba a la cabeza a dar un rodeo para desplegarse, así que el mínimo
+  //     de pasos ya no era la distancia en línea recta
+  //   - limitaba el largo de la serpiente a ~1/3 del tablero
+  // Naciendo colapsada no hay cuerpo que estorbe: el camino mínimo es el camino.
+  //
+  // De qué esquina entra lo elige cada nivel con `nace` ('ne' | 'no' | 'se' | 'so',
+  // default 'ne'), para que no arranquen todos igual. Cambiarlo cambia el óptimo.
+  //
+  // Los segmentos son objetos distintos aunque compartan casilla: el resto del
+  // código los recorre de a uno y conviene que nadie comparta referencia.
   _buildInitialSnake() {
-    const s = [];
-    let c = this.COLS - 1, r = 0;
-    for (let i = 0; i < this.SNAKE_LENGTH; i++) {
-      s.push({ c, r });
-      if (r < this.ROWS - 1) r++;
-      else c = Math.max(0, c - 1);
-    }
-    return s;
+    const c = (this.NACE === 'no' || this.NACE === 'so') ? 0 : this.COLS - 1;
+    const r = (this.NACE === 'so' || this.NACE === 'se') ? this.ROWS - 1 : 0;
+    return Array.from({ length: this.SNAKE_LENGTH }, () => ({ c, r }));
   }
 
   // ── HUD ──
@@ -211,7 +257,7 @@ export default class PuzzleScene extends Phaser.Scene {
     const nivBg = this.add.rectangle(10, 18, 26, 22, 0x12122a)
       .setStrokeStyle(1, 0x4fc3f7).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
     const nivTxt = this.add.text(23, 18, '☰', {
-      fontSize: '15px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '15px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5);
     const abrirNiveles = () => this.scene.start('LevelSelectScene', { desde: this.nivelIdx });
     nivBg.on('pointerover', () => nivBg.setFillStyle(0x1a1a3a));
@@ -221,12 +267,12 @@ export default class PuzzleScene extends Phaser.Scene {
 
     // nombre nivel — izquierda
     this.add.text(44, 18, levelData.name.toUpperCase(), {
-      fontSize: '11px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '11px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0, 0.5);
 
     // puntos — centrado en zona grid
     this.add.text(ctrlX / 2, 18, `★ ${GameState.puntosTotal} pts`, {
-      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
 
     // botón salir — extremo derecho de zona grid con margen
@@ -235,7 +281,7 @@ export default class PuzzleScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setInteractive({ useHandCursor: true });
     const salirTxt = this.add.text(ctrlX - 37, 18, 'salir', {
-      fontSize: '11px', color: '#ef5350', fontFamily: 'monospace'
+      fontSize: '11px', color: '#ef5350', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
     salirBg.on('pointerover',  () => salirBg.setFillStyle(0x3a0a0a));
     salirBg.on('pointerout',   () => salirBg.setFillStyle(0x1a0a0a));
@@ -245,8 +291,68 @@ export default class PuzzleScene extends Phaser.Scene {
 
     // movimientos — justo antes del botón salir
     this.moveTxt = this.add.text(ctrlX - 74, 18, 'mov: 0', {
-      fontSize: '11px', color: '#a5d6a7', fontFamily: 'monospace'
+      fontSize: '11px', color: '#a5d6a7', fontFamily: FUENTE
     }).setOrigin(1, 0.5);
+
+    // reloj del nivel — el dato que después se sube a la base de datos
+    this.tiempoTxt = this.add.text(ctrlX - 126, 18, '⏱ 0:00', {
+      fontSize: '11px', color: '#8a8aa8', fontFamily: FUENTE
+    }).setOrigin(1, 0.5);
+  }
+
+  // ── camino punteado ──
+  // Piedritas que marcan la ruta: entrada → batería → … → LED. En los primeros
+  // niveles sale gratis (el chico todavía no sabe que hay un orden); después hay
+  // que pedirlo con el botón de pista.
+  // No revela la solución completa: marca por dónde ir, pero la serpiente igual
+  // tiene que caber sin morderse.
+  _dibujarCamino() {
+    if (this.caminoGfx) { this.caminoGfx.destroy(); this.caminoGfx = null; }
+    if (!this.mostrarCamino || this.solved) return;
+
+    const g = this.add.graphics().setDepth(96);
+    this.caminoGfx = g;
+
+    // celdas ocupadas por componentes: el camino tiene que esquivarlas o el chico
+    // pisa una pieza que no es la que toca y se le desordena la secuencia
+    const ocupadas = new Set(this.COMPONENTS.map(c => `${c.c},${c.r}`));
+
+    // tramo en L entre dos celdas, en una de las dos formas posibles
+    const tramo = (a, b, vertPrimero) => {
+      const cel = [];
+      if (vertPrimero) {
+        for (let r = a.r; r !== b.r; r += Math.sign(b.r - a.r)) cel.push({ c: a.c, r });
+        for (let c = a.c; c !== b.c; c += Math.sign(b.c - a.c)) cel.push({ c, r: b.r });
+      } else {
+        for (let c = a.c; c !== b.c; c += Math.sign(b.c - a.c)) cel.push({ c, r: a.r });
+        for (let r = a.r; r !== b.r; r += Math.sign(b.r - a.r)) cel.push({ c: b.c, r });
+      }
+      cel.shift();                          // el primero es el componente anterior
+      return cel;
+    };
+    const cruces = cel => cel.filter(x => ocupadas.has(`${x.c},${x.r}`)).length;
+
+    const ruta = [this.celdaEntrada, ...this.COMPONENTS];
+    for (let i = 0; i < ruta.length - 1; i++) {
+      const a = ruta[i], b = ruta[i + 1];
+      const color = this._compDef(b.sym).color;
+      // de las dos L, la que menos componentes atraviesa
+      const horiz = tramo(a, b, false), vert = tramo(a, b, true);
+      const celdas = cruces(vert) < cruces(horiz) ? vert : horiz;
+
+      celdas.forEach(cl => {
+        if (ocupadas.has(`${cl.c},${cl.r}`)) return;   // nunca una piedrita sobre una pieza
+        const p = this._celdaCentro(cl.c, cl.r);
+        g.fillStyle(color, 0.5);
+        g.fillCircle(p.x, p.y, Math.max(3, this.TILE * 0.09));
+      });
+    }
+
+    // late suave para que se lea como "seguime" y no como decoración
+    this.tweens.add({
+      targets: g, alpha: { from: 0.45, to: 1 },
+      duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    });
   }
 
   // ── grid ──
@@ -349,6 +455,28 @@ export default class PuzzleScene extends Phaser.Scene {
           this.tileObjects[tkey].push(flow, ring);
         }
 
+        // ── el próximo componente late: "andá acá ahora" ──
+        // Es la guía que enseña el orden sin números. Empieza en la batería (siempre
+        // primera) y va saltando sola. No dice el camino, sólo el destino: rutear la
+        // serpiente sigue siendo del chico.
+        const esProximo = comp && !this.solved &&
+                          this.COMPONENTS[this.proximoComp] === comp;
+        if (esProximo) {
+          const halo = this.add.circle(tcx, tcy, T * 0.62, 0xffffff, 0.30)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(97);
+          this.tweens.add({
+            targets: halo, scale: { from: 0.75, to: 1.15 }, alpha: { from: 0.5, to: 0.1 },
+            duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+          });
+          const aro = this.add.rectangle(tcx, tcy, T * 0.98, T * 0.98)
+            .setStrokeStyle(3, 0xffffff, 0.95).setDepth(97);
+          this.tweens.add({
+            targets: aro, alpha: { from: 0.35, to: 1 },
+            duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+          });
+          this.tileObjects[tkey].push(halo, aro);
+        }
+
         // glow pulsante en componentes alineados (encendidos por la corriente)
         if (comp && si >= 0 && sm && sm.comp && this._segmentoAlineado(si)) {
           const glow = this.add.circle(tcx, tcy, T * 0.5, sm.color, 0.35)
@@ -371,7 +499,7 @@ export default class PuzzleScene extends Phaser.Scene {
           this.tileObjects[tkey].push(...objs);
           const col  = `#${def.color.toString(16).padStart(6,'0')}`;
           const lbl  = this.add.text(tcx, tcy + T * 0.22, def.label, {
-            fontSize: `${Math.max(9, Math.floor(T * 0.16))}px`, color: col, fontFamily: 'monospace',
+            fontSize: `${Math.max(9, Math.floor(T * 0.16))}px`, color: col, fontFamily: FUENTE,
             stroke: '#000000', strokeThickness: 2
           }).setOrigin(0.5).setAlpha(cubierto ? 0.6 : 1);
           // número de orden — SIEMPRE nítido (referencia clave que no debe perderse)
@@ -382,7 +510,7 @@ export default class PuzzleScene extends Phaser.Scene {
           const chip   = this.add.circle(chipX, chipY, chipR, 0x0d0d1f, 0.9)
             .setStrokeStyle(1.5, def.color);
           const num    = this.add.text(chipX, chipY, `${comp.order}`, {
-            fontSize: `${numSz}px`, color: '#ffffff', fontFamily: 'monospace',
+            fontSize: `${numSz}px`, color: '#ffffff', fontFamily: FUENTE,
             stroke: '#000000', strokeThickness: 2
           }).setOrigin(0.5);
           this.tileObjects[tkey].push(lbl, chip, num);
@@ -537,7 +665,7 @@ export default class PuzzleScene extends Phaser.Scene {
       .setOrigin(0, 0.5).setStrokeStyle(1.5, 0xfff176)
       .setInteractive({ useHandCursor: true });
     this.pistaTxt = this.add.text(zoneLeft + btnW / 2, this.hintCy, '', {
-      fontSize: isMobile ? '11px' : '12px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: isMobile ? '11px' : '12px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5);
     this.pistaBg.on('pointerover', () => this.pistaBg.setFillStyle(0x1a1a2a));
     this.pistaBg.on('pointerout',  () => this.pistaBg.setFillStyle(0x12122a));
@@ -554,6 +682,11 @@ export default class PuzzleScene extends Phaser.Scene {
       this.pistaTxt.setText(`pista (${n})`);
       this.pistaTxt.setColor('#4caf50');
       this.pistaBg.setStrokeStyle(1.5, 0x4caf50);
+    } else if (this.mostrarCamino) {
+      // el camino ya está a la vista (niveles iniciales): no tiene sentido cobrar por él
+      this.pistaTxt.setText('💡 sigue las luces');
+      this.pistaTxt.setColor('#a5d6a7');
+      this.pistaBg.setStrokeStyle(1.5, 0xa5d6a7);
     } else if (n > 0) {
       this.pistaTxt.setText(`💡 pista (${n})`);
       this.pistaTxt.setColor('#fff176');
@@ -567,9 +700,14 @@ export default class PuzzleScene extends Phaser.Scene {
 
   _revelarPista() {
     if (this.pistaRevelada) return;
+    // en los niveles iniciales el camino ya está a la vista: el botón es un cartel,
+    // no cobra nada ni manda a la tienda
+    if (this.mostrarCamino) return;
     if (GameState.pistas > 0) {
       GameState.usarPista();
       this.pistaRevelada = true;
+      this.mostrarCamino = true;      // la pista enciende también el camino en el tablero
+      this._dibujarCamino();
       this._dibujarSecuenciaPista();
       this._actualizarHintTiles();
       this._dibujarBotonPista();
@@ -604,7 +742,7 @@ export default class PuzzleScene extends Phaser.Scene {
 
       // etiqueta arriba (distingue BAT vs LED, ambos círculos)
       const lbl = this.add.text(hcx, cy - tileH / 2 + 8, def.label, {
-        fontSize: '8px', color: col, fontFamily: 'monospace'
+        fontSize: '8px', color: col, fontFamily: FUENTE
       }).setOrigin(0.5);
       this.hintSeqObjs.push(lbl);
 
@@ -614,7 +752,7 @@ export default class PuzzleScene extends Phaser.Scene {
 
       // número de orden — grande
       const num = this.add.text(hcx, cy + tileH / 2 - 9, `${comp.order}`, {
-        fontSize: isMobile ? '14px' : '16px', color: '#ffffff', fontFamily: 'monospace',
+        fontSize: isMobile ? '14px' : '16px', color: '#ffffff', fontFamily: FUENTE,
         stroke: '#000000', strokeThickness: 3
       }).setOrigin(0.5);
       this.hintSeqObjs.push(num);
@@ -622,7 +760,7 @@ export default class PuzzleScene extends Phaser.Scene {
       // flecha de secuencia
       if (i < comps.length - 1) {
         const arrow = this.add.text(hx + tileW + gap / 2, cy, '›', {
-          fontSize: '16px', color: '#555', fontFamily: 'monospace'
+          fontSize: '16px', color: '#555', fontFamily: FUENTE
         }).setOrigin(0.5);
         this.hintSeqObjs.push(arrow);
       }
@@ -671,7 +809,7 @@ export default class PuzzleScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
       // flecha: sprite (ui.btn_*) o glifo de texto como fallback
       const arr = SpriteConfig.colocar(this, 'ui', d.key, d.x, d.y, () => this.add.text(d.x, d.y, d.label, {
-        fontSize: '22px', color: '#4fc3f7', fontFamily: 'monospace'
+        fontSize: '22px', color: '#4fc3f7', fontFamily: FUENTE
       }).setOrigin(0.5));
       if (arr instanceof Phaser.GameObjects.Image) arr.setDisplaySize(btnSz * 1.3, btnSz * 1.3);
       btn.on('pointerdown', () => this._mover(d.dc, d.dr));
@@ -686,7 +824,7 @@ export default class PuzzleScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x333355)
       .setInteractive({ useHandCursor: true });
     const rstTxt = this.add.text(rstX, rstY, 'R — reiniciar', {
-      fontSize: '11px', color: '#555', fontFamily: 'monospace'
+      fontSize: '11px', color: '#555', fontFamily: FUENTE
     }).setOrigin(0.5);
     rstBg.on('pointerover',  () => { rstBg.setFillStyle(0x1a1a2a); rstTxt.setColor('#888'); });
     rstBg.on('pointerout',   () => { rstBg.setFillStyle(0x12122a); rstTxt.setColor('#555'); });
@@ -878,6 +1016,11 @@ export default class PuzzleScene extends Phaser.Scene {
     this.moveTxt.setText(`mov: ${this.moveCount}`);
     this.connected = this._checkConectado();
 
+    // ¿la cabeza pisó el componente que tocaba? entonces se ilumina el siguiente.
+    // Sólo avanza, nunca retrocede: la guía acompaña, no castiga.
+    const meta = this.COMPONENTS[this.proximoComp];
+    if (meta && meta.c === nc && meta.r === nr) this.proximoComp++;
+
     // energía: corriente desde donde la serpiente toca la celda de la batería
     this._calcEnergia();
     // detectar componentes recién alineados para el chispazo
@@ -916,14 +1059,21 @@ export default class PuzzleScene extends Phaser.Scene {
 
   _ganar() {
     this.solved = true;
+    if (this.caminoGfx) { this.caminoGfx.destroy(); this.caminoGfx = null; }
+    this.tiempoFin = Date.now();
+    const segundos = this._segundos();
+    const marca    = GameState.registrarTiempo(this.nivelIdx, segundos);
     if (this.energyEmitter) this.energyEmitter.emitting = false;
     const puntos     = Math.max(300 - this.moveCount * 5, 20);
     const eraPrimera = !GameState.nivelesCompletados.includes(this.nivelIdx);
-    const ganados    = GameState.completarNivel(this.nivelIdx, puntos);  // 0 si no mejoró
-    const mejor      = GameState.mejorPuntaje[this.nivelIdx] || puntos;
-    // estrellas: 3 = óptimo, 2 = hasta +25%, 1 = completado
+    // estrellas: 3 = óptimo, 2 = hasta +25%, 1 = completado.
+    // Se calculan ANTES de completarNivel porque de ellas dependen las monedas.
     const estrellas  = this.moveCount <= this.OPTIMO ? 3
                      : this.moveCount <= Math.ceil(this.OPTIMO * 1.25) ? 2 : 1;
+    const premio     = GameState.completarNivel(this.nivelIdx, puntos, estrellas);  // 0 si no mejoró
+    const ganados    = premio.puntos;
+    const monedas    = premio.monedas;
+    const mejor      = GameState.mejorPuntaje[this.nivelIdx] || puntos;
     const mejorEstr  = GameState.registrarEstrellas(this.nivelIdx, estrellas);
     this._dibujarGrid();
     this._celebrar();
@@ -940,12 +1090,12 @@ export default class PuzzleScene extends Phaser.Scene {
     reg(this.add.rectangle(panelX, height / 2, panelW, 218, 0x080814, 0.97)
       .setStrokeStyle(2, 0x4caf50));
     reg(this.add.text(panelX, height / 2 - 88, '¡CIRCUITO COMPLETO!', {
-      fontSize: '17px', color: '#4caf50', fontFamily: 'monospace'
+      fontSize: '17px', color: '#4caf50', fontFamily: FUENTE
     }).setOrigin(0.5));
 
     // ── botón X — cerrar el panel para ver la solución ──
     const cerrar = reg(this.add.text(panelX + panelW / 2 - 16, height / 2 - 109 + 15, '✕', {
-      fontSize: '16px', color: '#888', fontFamily: 'monospace'
+      fontSize: '16px', color: '#888', fontFamily: FUENTE
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
     cerrar.on('pointerover', () => cerrar.setColor('#ef5350'));
     cerrar.on('pointerout',  () => cerrar.setColor('#888'));
@@ -967,31 +1117,39 @@ export default class PuzzleScene extends Phaser.Scene {
     } else {
       const starStr = '★'.repeat(estrellas) + '☆'.repeat(3 - estrellas);
       const star = reg(this.add.text(panelX, height / 2 - 60, starStr, {
-        fontSize: '30px', color: '#fff176', fontFamily: 'monospace'
+        fontSize: '30px', color: '#fff176', fontFamily: FUENTE
       }).setOrigin(0.5));
       star.setScale(0.4); star.setAlpha(0);
       this.tweens.add({ targets: star, scale: 1, alpha: 1, duration: 350, ease: 'Back.easeOut' });
     }
     if (mejorEstr > estrellas) {
       reg(this.add.text(panelX, height / 2 - 40, `mejor: ${'★'.repeat(mejorEstr)}`, {
-        fontSize: '10px', color: '#888', fontFamily: 'monospace'
+        fontSize: '10px', color: '#888', fontFamily: FUENTE
       }).setOrigin(0.5));
     }
 
-    reg(this.add.text(panelX, height / 2 - 24, `movimientos: ${this.moveCount}  ·  óptimo: ${this.OPTIMO}`, {
-      fontSize: '11px', color: '#888', fontFamily: 'monospace'
+    const tiempoTxt = `⏱ ${GameState.formatearTiempo(segundos)}` +
+      (marca.mejor < Math.round(segundos) ? `  (tu mejor: ${GameState.formatearTiempo(marca.mejor)})` : '');
+    reg(this.add.text(panelX, height / 2 - 24,
+      `movimientos: ${this.moveCount}  ·  óptimo: ${this.OPTIMO}  ·  ${tiempoTxt}`, {
+      fontSize: '11px', color: '#888', fontFamily: FUENTE
     }).setOrigin(0.5));
-    // puntaje otorgado — distingue primera vez / récord mejorado / sin mejora
+    // Recompensa. Se muestran las MONEDAS, no los puntos: son las que el chico
+    // gasta en la tienda y las que dependen de las estrellas que acaba de ver.
+    // Los puntos quedan como récord interno; decirle "+280 puntos" cuando recibe
+    // 50 monedas sólo confunde.
     let scoreTxt, scoreCol, scoreSz;
-    if (ganados > 0 && eraPrimera) {
-      scoreTxt = `+${ganados} puntos`;            scoreCol = '#fff176'; scoreSz = '18px';
+    if (monedas > 0 && eraPrimera) {
+      scoreTxt = `+${monedas} 🪙`;                       scoreCol = '#ffd54f'; scoreSz = '20px';
+    } else if (monedas > 0) {
+      scoreTxt = `+${monedas} 🪙 · ¡mejoraste!`;         scoreCol = '#4caf50'; scoreSz = '16px';
     } else if (ganados > 0) {
-      scoreTxt = `+${ganados} pts · ¡nuevo récord!`; scoreCol = '#4caf50'; scoreSz = '15px';
+      scoreTxt = `¡nuevo récord! (${mejor} pts)`;        scoreCol = '#4caf50'; scoreSz = '13px';
     } else {
-      scoreTxt = `sin mejora · tu récord: ${mejor} pts`; scoreCol = '#888'; scoreSz = '12px';
+      scoreTxt = `saca más estrellas para ganar 🪙`;     scoreCol = '#888';    scoreSz = '12px';
     }
     reg(this.add.text(panelX, height / 2 - 2, scoreTxt, {
-      fontSize: scoreSz, color: scoreCol, fontFamily: 'monospace'
+      fontSize: scoreSz, color: scoreCol, fontFamily: FUENTE
     }).setOrigin(0.5));
 
     const siguienteIdx = this.nivelIdx + 1;
@@ -1001,29 +1159,29 @@ export default class PuzzleScene extends Phaser.Scene {
 
     if (hayMas && !sigBloqueado) {
       const btnSig = reg(this.add.text(panelX, height / 2 + 30, '[ siguiente nivel ]', {
-        fontSize: '13px', color: '#4fc3f7', fontFamily: 'monospace'
+        fontSize: '13px', color: '#4fc3f7', fontFamily: FUENTE
       }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
       btnSig.on('pointerdown', () => this.scene.start('PuzzleScene', { nivelIdx: siguienteIdx }));
     } else if (hayMas && sigBloqueado) {
       const btnTienda = reg(this.add.text(panelX, height / 2 + 30, '[ desbloquear en la tienda 🛒 ]', {
-        fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+        fontSize: '12px', color: '#fff176', fontFamily: FUENTE
       }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
       btnTienda.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
     } else {
       const msg = !GameState.puedeJugarHoy() ? '¡completaste tus niveles de hoy!' : '¡completaste todos los niveles!';
       reg(this.add.text(panelX, height / 2 + 30, msg, {
-        fontSize: '11px', color: '#888', fontFamily: 'monospace'
+        fontSize: '11px', color: '#888', fontFamily: FUENTE
       }).setOrigin(0.5));
     }
 
     const btnSalir = reg(this.add.text(panelX, height / 2 + 62, '[ volver al cuarto ]', {
-      fontSize: '11px', color: '#444', fontFamily: 'monospace'
+      fontSize: '11px', color: '#444', fontFamily: FUENTE
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
     btnSalir.on('pointerdown', () => this.scene.start('RoomScene'));
 
     // pista para reabrir el resumen tras cerrar con la X
     reg(this.add.text(panelX, height / 2 + 84, '(✕ cierra · R reinicia)', {
-      fontSize: '9px', color: '#444', fontFamily: 'monospace'
+      fontSize: '9px', color: '#444', fontFamily: FUENTE
     }).setOrigin(0.5));
   }
 
@@ -1042,8 +1200,22 @@ export default class PuzzleScene extends Phaser.Scene {
     }
   }
 
+  // segundos transcurridos desde que arrancó el nivel (congelado al resolverlo)
+  _segundos() {
+    const fin = this.tiempoFin ?? Date.now();
+    return (fin - this.tiempoInicio) / 1000;
+  }
+
   update() {
     if (this.solved) return;
+
+    // el reloj se refresca sólo cuando cambia el segundo, no en cada frame
+    const s = Math.floor(this._segundos());
+    if (s !== this._ultimoSegundo) {
+      this._ultimoSegundo = s;
+      if (this.tiempoTxt) this.tiempoTxt.setText(`⏱ ${GameState.formatearTiempo(s)}`);
+    }
+
     const { left, right, up, down } = this.cursors;
     if (Phaser.Input.Keyboard.JustDown(left))  this._mover(-1,  0);
     if (Phaser.Input.Keyboard.JustDown(right)) this._mover( 1,  0);

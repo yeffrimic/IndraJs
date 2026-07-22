@@ -30,4 +30,18 @@ const config = {
   scene: [BootScene, LoginScene, RoomScene, PuzzleScene, StoreScene, LevelSelectScene]
 };
 
-window.game = new Phaser.Game(config);
+// Phaser mide el texto al crearlo: si arranca antes de que la fuente esté lista,
+// los primeros textos quedan renderizados con la fuente de respaldo. Esperamos
+// (con tope de seguridad) a que el navegador la tenga disponible.
+function _arrancar() {
+  window.game = new Phaser.Game(config);
+}
+
+if (document.fonts && document.fonts.load) {
+  Promise.race([
+    document.fonts.load('16px "Fredoka"').then(() => document.fonts.ready),
+    new Promise(res => setTimeout(res, 2000)),   // si no hay red, no bloqueamos el juego
+  ]).then(_arrancar).catch(_arrancar);
+} else {
+  _arrancar();
+}

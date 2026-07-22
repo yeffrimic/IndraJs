@@ -1,5 +1,6 @@
 import GameState    from '../state/GameState.js';
-import SpriteConfig from '../SpriteConfig.js';
+import Dev          from '../Dev.js';
+import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import { LEVELS, packRequerido } from '../levels.js';
 
 export default class RoomScene extends Phaser.Scene {
@@ -8,6 +9,11 @@ export default class RoomScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     const S = SpriteConfig;
+
+    // ── editor visual del cuarto (?editroom, sólo en desarrollo) ──
+    this.editMode  = Dev.flag('editroom');
+    this.layout    = this._cargarLayout();
+    this.editables = [];
 
     // ── fondo / background (placeholder → pixel art) ──
     const bgKey = S.get('cuarto', 'bg');
@@ -18,15 +24,16 @@ export default class RoomScene extends Phaser.Scene {
     }
 
     // ── workbench ──
-    const WB_X = 600, WB_Y = 100;
-    S.colocar(this, 'cuarto', 'workbench', WB_X, WB_Y, null);
+    const WB_X = this.layout.workbench.x, WB_Y = this.layout.workbench.y;
+    const wbObj = S.colocar(this, 'cuarto', 'workbench', WB_X, WB_Y,
+      () => this._dibujarWorkbenchPlaceholder(WB_X, WB_Y));
     // label y hint siempre visibles
-    this.add.text(WB_X, WB_Y + 55, '⚡ WORKBENCH', {
-      fontSize: '11px', color: '#a5d6a7', fontFamily: 'monospace'
+    const wbLabel = this.add.text(WB_X, WB_Y + 55, '⚡ WORKBENCH', {
+      fontSize: '11px', color: '#a5d6a7', fontFamily: FUENTE
     }).setOrigin(0.5);
 
     this.interactHint = this.add.text(WB_X, WB_Y + 72, '[ acércate ]', {
-      fontSize: '10px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '10px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({
@@ -34,25 +41,24 @@ export default class RoomScene extends Phaser.Scene {
       alpha: { from: 0, to: 1 },
       duration: 600, yoyo: true, repeat: -1
     });
+    this.editables.push({ nombre: 'workbench', x: WB_X, y: WB_Y, objs: [wbObj, wbLabel, this.interactHint].filter(Boolean) });
 
     // ── tienda ──
-    const TIENDA_X = 380, TIENDA_Y = 120;
-    S.colocar(this, 'cuarto', 'tienda', TIENDA_X, TIENDA_Y,
+    const TIENDA_X = this.layout.tienda.x, TIENDA_Y = this.layout.tienda.y;
+    const tdObj = S.colocar(this, 'cuarto', 'tienda', TIENDA_X, TIENDA_Y,
       () => this._dibujarTiendaPlaceholder(TIENDA_X, TIENDA_Y));
-    this.add.text(TIENDA_X, TIENDA_Y + 55, '🛒 TIENDA', {
-      fontSize: '11px', color: '#fff176', fontFamily: 'monospace'
+    const tdLabel = this.add.text(TIENDA_X, TIENDA_Y + 55, '🛒 TIENDA', {
+      fontSize: '11px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5);
     this.tiendaHint = this.add.text(TIENDA_X, TIENDA_Y + 72, '[ acércate ]', {
-      fontSize: '10px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: '10px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({
       targets: this.tiendaHint,
       alpha: { from: 0, to: 1 },
       duration: 600, yoyo: true, repeat: -1
     });
-
-    // ── escritorio ──
-    S.colocar(this, 'cuarto', 'escritorio', 160, 120, null);
+    this.editables.push({ nombre: 'tienda', x: TIENDA_X, y: TIENDA_Y, objs: [tdObj, tdLabel, this.tiendaHint].filter(Boolean) });
 
     // ── muebles comprados ──
     this._dibujarMuebles(S);
@@ -68,6 +74,9 @@ export default class RoomScene extends Phaser.Scene {
     this.cercaDeTienda     = false;
 
     // ── controles ──
+    // se resetea acá y no en los botones táctiles: si salías a la tienda con el d-pad
+    // apretado, al volver el nene arrancaba caminando solo.
+    this._touchDir = null;
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyE    = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
@@ -79,25 +88,202 @@ export default class RoomScene extends Phaser.Scene {
     this._crearHUD(width, height);
 
     // ── bienvenida ──
-    this._mostrarBienvenida(width, height);
+    if (!this.editMode) this._mostrarBienvenida(width, height);
+
+    // ── editor visual ──
+    if (this.editMode) this._iniciarEditor();
   }
 
+  // ── layout del cuarto (posiciones de cada objeto, persistido) ──
+  // Calibrado a mano con ?editroom sobre el fondo actual. Si cambia cuarto_bg
+  // (sobre todo la línea pared/piso), hay que recalibrar.
+  _layoutDefaults() {
+    return {
+      // línea donde termina la pared y empieza el piso: el nene no puede subir de acá.
+      // Se calibra arrastrándola en ?editroom.
+      pisoY: 341,
+
+      workbench:  { x: 413, y: 297 },
+      tienda:     { x: 734, y: 512 },
+      estante:    { x: 139, y: 211 },
+      repisa:     { x: 201, y: 140 },
+      vitrina:    { x: 221, y: 296 },
+      ropero:     { x: 79,  y: 301 },
+      banquito:   { x: 543, y: 401 },
+      sillon:     { x: 93,  y: 405 },
+      sillon_ind: { x: 688, y: 369 },
+      planta:     { x: 594, y: 326 },
+      lampara:    { x: 770, y: 310 },
+      mesita:     { x: 734, y: 442 },
+      peluche:    { x: 619, y: 523 },
+      baul:       { x: 172, y: 528 },
+      pelota:     { x: 317, y: 544 },
+      tapete:     { x: 457, y: 490 },
+      poster:     { x: 235, y: 203 },
+      reloj:      { x: 493, y: 123 },
+      cuadro:     { x: 62,  y: 209 },
+    };
+  }
+
+  _cargarLayout() {
+    const def = this._layoutDefaults();
+    try {
+      const saved = JSON.parse(localStorage.getItem('room_layout') || '{}');
+      Object.keys(saved).forEach(k => { if (def[k] && saved[k]) def[k] = saved[k]; });
+    } catch (e) { /* layout por defecto */ }
+    return def;
+  }
+
+  _guardarLayout() {
+    try { localStorage.setItem('room_layout', JSON.stringify(this.layout)); } catch (e) {}
+  }
+
+  // ── modo edición: arrastrar objetos ──
+  _iniciarEditor() {
+    const { width, height } = this.scale;
+    this.add.rectangle(0, 0, width, 26, 0x000000, 0.65).setOrigin(0).setDepth(300);
+    this.add.text(8, 13, '✏️ EDITOR — arrastrá objetos y la línea del piso · [E] exportar (F12) · [R] reset', {
+      fontSize: '11px', color: '#ffffff', fontFamily: FUENTE
+    }).setOrigin(0, 0.5).setDepth(301);
+
+    // línea del piso: hasta acá puede subir el nene
+    const linea = this.add.rectangle(width / 2, this.layout.pisoY, width, 4, 0xff7043, 0.75)
+      .setDepth(250).setInteractive({ useHandCursor: true });
+    this.input.setDraggable(linea);
+    const lbl = this.add.text(10, this.layout.pisoY - 12, 'piso (tope del nene)', {
+      fontSize: '10px', color: '#0d0d1f', fontFamily: FUENTE,
+      backgroundColor: '#ff7043', padding: { x: 4, y: 1 }
+    }).setOrigin(0, 1).setDepth(251);
+    linea.on('drag', (p, dx, dy) => {
+      linea.y = dy; lbl.y = dy - 12;
+      this.layout.pisoY = Math.round(dy);
+      this._limitarAlPiso();
+      this._guardarLayout();
+    });
+
+    this.editables.forEach(ed => {
+      const handle = this.add.rectangle(ed.x, ed.y, 44, 44, 0x4fc3f7, 0.08)
+        .setStrokeStyle(2, 0x4fc3f7, 0.9).setDepth(250).setInteractive({ useHandCursor: true });
+      this.input.setDraggable(handle);
+      const tag = this.add.text(ed.x, ed.y - 30, ed.nombre, {
+        fontSize: '9px', color: '#0d0d1f', fontFamily: FUENTE,
+        backgroundColor: '#4fc3f7', padding: { x: 3, y: 1 }
+      }).setOrigin(0.5).setDepth(251);
+
+      handle.on('drag', (p, dragX, dragY) => {
+        const ddx = dragX - handle.x, ddy = dragY - handle.y;
+        handle.x = dragX; handle.y = dragY;
+        tag.x = dragX; tag.y = dragY - 30;
+        ed.objs.forEach(o => { o.x += ddx; o.y += ddy; });
+        this.layout[ed.nombre] = { x: Math.round(dragX), y: Math.round(dragY) };
+        this._guardarLayout();
+      });
+    });
+
+    this.input.keyboard.on('keydown-E', () => {
+      console.log('room_layout =', JSON.stringify(this.layout, null, 2));
+      this._toastEditor('layout exportado a la consola (F12)');
+    });
+    this.input.keyboard.on('keydown-R', () => {
+      localStorage.removeItem('room_layout');
+      this.scene.restart();
+    });
+  }
+
+  _toastEditor(msg) {
+    const t = this.add.text(this.scale.width / 2, this.scale.height - 16, msg, {
+      fontSize: '12px', color: '#fff', fontFamily: FUENTE,
+      backgroundColor: '#000000aa', padding: { x: 8, y: 4 }
+    }).setOrigin(0.5).setDepth(301);
+    this.time.delayedCall(1800, () => t.destroy());
+  }
+
+  // El cuerpo de física es SIEMPRE un rectángulo invisible: es lo que se mueve y
+  // choca contra los bordes. Lo visible (sprite o placeholder) lo sigue en update().
+  // Así el dibujo puede cambiar de tamaño sin tocar la física ni las distancias.
   _crearPersonaje(x, y, S) {
-    if (S.activo() && S.get('personaje', 'key') !== null) {
-      // sprite real con animaciones
-      this.playerSprite = this.physics.add.sprite(x, y, SpriteConfig.personaje.key)
-        .setScale(SpriteConfig.personaje.escala)
-        .setCollideWorldBounds(true);
-      this.playerSprite.play('idle');
-      this.player = this.playerSprite;
+    this.PIES_OFF = 18;                       // dónde caen los pies respecto del centro del cuerpo
+
+    // La instancia de la escena se reutiliza entre scene.start(): estas referencias
+    // apuntarían a objetos ya destruidos de la visita anterior.
+    this.playerImg = null;
+    this.playerSombra = null;
+    this.playerGfx = null;
+
+    this.CUERPO_H = 36;
+    this.player = this.physics.add.image(x, y, '__DEFAULT')
+      .setVisible(false)
+      .setDisplaySize(28, this.CUERPO_H);
+    this.player.setCollideWorldBounds(true);
+
+    // El nene camina SOLO sobre el piso, no sobre la pared. En vez de chequearlo a mano
+    // en update(), se achica el mundo de física: el tope de arriba queda donde sus pies
+    // tocan la línea del piso, y arcade se encarga del resto (también frena en diagonal).
+    this._limitarAlPiso();
+
+    this.pjNombre = GameState.personaje || 'nino';
+    this.pjDir    = 'abajo';
+    const pose0   = S.activo() ? S.pose(this.pjNombre, 'abajo') : null;
+
+    if (pose0 && this.textures.exists(pose0.key)) {
+      // sombrita primero (queda detrás), después el nene
+      this.playerSombra = this.add.graphics();
+      this.playerImg = this.add.image(x, y + this.PIES_OFF, pose0.key);
+      this._aplicarPose('abajo', true);   // forzado: la imagen nace en escala 1
     } else {
-      // placeholder con Graphics
       this.playerGfx = this.add.graphics();
       this._dibujarPersonajePlaceholder(x, y);
-      this.player = this.physics.add.image(x, y, '__DEFAULT')
-        .setVisible(false)
-        .setDisplaySize(28, 36);
-      this.player.setCollideWorldBounds(true);
+    }
+  }
+
+  // Cambia la pose del personaje. Cada PNG tiene su propio recorte, así que al girar
+  // hay que reajustar ancla y escala — si no, el nene se hunde o cambia de altura.
+  //
+  // El "ya está puesta" se decide mirando la textura del objeto, NO una bandera de la
+  // escena: Phaser reutiliza la instancia entre scene.start(), así que cualquier flag
+  // sobrevive a la vuelta desde la tienda o el puzzle y saltearía el ajuste de escala.
+  _aplicarPose(dir, forzar = false) {
+    if (!this.playerImg) return;
+    const p = SpriteConfig.pose(this.pjNombre, dir);
+    if (!p || !this.textures.exists(p.key)) return;
+    if (!forzar && this.playerImg.texture.key === p.key) return;
+    this.pjDir = dir;
+    this.playerImg.setTexture(p.key)
+      .setOrigin(0.5, p.anclaY)
+      .setScale(SpriteConfig.escalaPose(this.pjNombre, dir));
+  }
+
+  // dirección a la que mira según cómo se mueve (horizontal manda sobre vertical)
+  _direccionDe(vx, vy) {
+    if (vx < 0) return 'izq';
+    if (vx > 0) return 'der';
+    if (vy < 0) return 'arriba';
+    if (vy > 0) return 'abajo';
+    return this.pjDir;          // quieto: se queda mirando a donde iba
+  }
+
+  // Ajusta los límites del mundo para que los pies nunca pasen de la línea del piso.
+  //   pies      = player.y + PIES_OFF
+  //   borde sup = player.y - CUERPO_H/2
+  // queremos pies >= pisoY, así que el borde superior del mundo va PIES_OFF + medio
+  // cuerpo más arriba de esa línea.
+  _limitarAlPiso() {
+    const { width, height } = this.scale;
+    const tope = this.layout.pisoY - this.PIES_OFF - this.CUERPO_H / 2;
+    this.physics.world.setBounds(0, tope, width, height - tope);
+  }
+
+  // mueve lo visible a donde esté el cuerpo de física
+  _seguirAlCuerpo() {
+    const px = this.player.x, py = this.player.y;
+    if (this.playerImg) {
+      this.playerImg.setPosition(px, py + this.PIES_OFF);
+      const g = this.playerSombra;
+      g.clear();
+      g.fillStyle(0x000000, 0.22);
+      g.fillEllipse(px, py + this.PIES_OFF, 34, 10);
+    } else {
+      this._dibujarPersonajePlaceholder(px, py);
     }
   }
 
@@ -115,6 +301,7 @@ export default class RoomScene extends Phaser.Scene {
     g.fillCircle(x + 5, y - 30, 2);
   }
 
+  // fondo liso: solo piso + pared (los muebles se colocan aparte)
   _dibujarCuartoPlaceholder(width, height) {
     const g = this.add.graphics();
 
@@ -128,36 +315,16 @@ export default class RoomScene extends Phaser.Scene {
     g.fillStyle(0x12122a); g.fillRect(0, 0, width, 200);
     g.fillStyle(0x0a0a1a); g.fillRect(0, 196, width, 6);
     g.fillStyle(0x4fc3f7); g.fillRect(0, 195, width, 2);
+  }
 
-    // workbench
-    g.fillStyle(0x2a1e0e); g.fillRect(460, 60, 280, 20);
-    g.fillStyle(0x1e1408); g.fillRect(460, 78, 280, 80);
-    g.fillStyle(0xef9f27, 0.5); g.fillRect(460, 58, 280, 3);
-    g.fillStyle(0x1a1008); g.fillRect(470, 156, 12, 35); g.fillRect(716, 156, 12, 35);
-
-    // monitor
-    g.fillStyle(0x080814); g.fillRoundedRect(570, 20, 130, 72, 4);
-    g.fillStyle(0x091e12); g.fillRect(576, 26, 118, 60);
-    g.fillStyle(0x1a1408); g.fillRect(626, 90, 18, 10);
-
-    // estante
-    g.fillStyle(0x2a2a4a); g.fillRect(20, 40, 200, 12);
-    const bookColors = [0x4fc3f7, 0xce93d8, 0xa5d6a7, 0xff7043, 0xfff176, 0x4fc3f7];
-    bookColors.forEach((col, i) => {
-      g.fillStyle(col, 0.7);
-      g.fillRect(28 + i * 20, 8, 16, 34);
-    });
-
-    // escritorio
-    g.fillStyle(0x3d2810); g.fillRect(20, 80, 200, 16);
-    g.fillStyle(0x2a1e08); g.fillRect(20, 94, 200, 80);
-    g.fillStyle(0x1e1408); g.fillRect(28, 172, 12, 36); g.fillRect(196, 172, 12, 36);
-    g.fillStyle(0x0a1a2a); g.fillRoundedRect(36, 106, 56, 40, 2);
-
-    // alfombra
-    g.fillStyle(0x1e1e3a); g.fillRoundedRect(80, 310, 560, 230, 8);
-    g.lineStyle(1.5, 0x252548, 1);
-    g.strokeRoundedRect(96, 324, 528, 202, 5);
+  // placeholder del workbench (hasta tener su PNG) — objeto propio, movible
+  _dibujarWorkbenchPlaceholder(x, y) {
+    const g = this.add.graphics();
+    g.fillStyle(0x6b4a2a); g.fillRoundedRect(x - 46, y - 14, 92, 34, 5);          // tablero
+    g.fillStyle(0x4a3018); g.fillRect(x - 40, y + 16, 10, 22); g.fillRect(x + 30, y + 16, 10, 22); // patas
+    g.fillStyle(0x222a3a); g.fillRoundedRect(x - 20, y - 42, 40, 26, 3);          // monitor
+    g.fillStyle(0x4fc3f7, 0.5); g.fillRect(x - 16, y - 38, 32, 18);
+    return g;
   }
 
   // ── placeholder tienda (hasta tener pixel art en SpriteConfig) ──
@@ -177,25 +344,24 @@ export default class RoomScene extends Phaser.Scene {
     g.strokeRect(x - 12, y - 14, 24, 16);
     g.strokeCircle(x - 6, y + 8, 3);
     g.strokeCircle(x + 6, y + 8, 3);
+    return g;
   }
 
-  // ── muebles comprados ──
+  // ── muebles: comprados (normal) o todos (modo edición) ──
   _dibujarMuebles(S) {
-    const posMueble = {
-      planta:  { x: 740, y: 430 },
-      lampara: { x: 60,  y: 250 },
-      poster:  { x: 300, y: 70  },
-      tapete:  { x: 360, y: 470 },
-    };
-    GameState.desbloqueos
-      .filter(id => id.startsWith('mueble_'))
-      .forEach(id => {
-        const tipo = id.replace('mueble_', '');
-        const pos  = posMueble[tipo];
-        if (!pos) return;
-        S.colocar(this, 'muebles', tipo, pos.x, pos.y,
-          () => this._dibujarMueblePlaceholder(tipo, pos.x, pos.y));
-      });
+    const tipos = this.editMode
+      ? Object.keys(SpriteConfig.muebles)   // en el editor se ven todos para acomodarlos
+      : GameState.desbloqueos.filter(id => id.startsWith('mueble_')).map(id => id.replace('mueble_', ''));
+
+    tipos.forEach(tipo => {
+      const pos = this.layout[tipo];
+      if (!pos) return;
+      const obj = S.colocar(this, 'muebles', tipo, pos.x, pos.y,
+        () => this._dibujarMueblePlaceholder(tipo, pos.x, pos.y));
+      if (this.editMode && obj) {
+        this.editables.push({ nombre: tipo, x: pos.x, y: pos.y, objs: [obj] });
+      }
+    });
   }
 
   _dibujarMueblePlaceholder(tipo, x, y) {
@@ -219,7 +385,22 @@ export default class RoomScene extends Phaser.Scene {
     } else if (tipo === 'tapete') {
       g.fillStyle(0x1e1e3a); g.fillRoundedRect(x - 60, y - 36, 120, 72, 8);
       g.lineStyle(1.5, 0x4fc3f7, 0.4); g.strokeRoundedRect(x - 52, y - 28, 104, 56, 5);
+    } else if (tipo === 'estante') {                 // repisa de pared (tabla + soportes)
+      g.fillStyle(0x6b4a2a); g.fillRoundedRect(x - 60, y - 6, 120, 12, 3);
+      g.fillStyle(0x4a3018); g.fillRect(x - 48, y + 6, 8, 14); g.fillRect(x + 40, y + 6, 8, 14);
+    } else if (tipo === 'repisa') {                  // estante chico
+      g.fillStyle(0x6b4a2a); g.fillRoundedRect(x - 38, y - 5, 76, 10, 3);
+      g.fillStyle(0x4a3018); g.fillRect(x - 30, y + 5, 6, 12); g.fillRect(x + 24, y + 5, 6, 12);
+    } else if (tipo === 'vitrina') {                 // mueble con repisas
+      g.fillStyle(0x4a3018); g.fillRoundedRect(x - 40, y - 50, 80, 100, 6);
+      g.fillStyle(0x6b4a2a); g.fillRect(x - 34, y - 22, 68, 8); g.fillRect(x - 34, y + 6, 68, 8);
+      g.fillStyle(0x9fd8f0, 0.25); g.fillRoundedRect(x - 34, y - 44, 68, 88, 4);
+    } else {
+      // genérico (mueble sin dibujo propio, hasta tener su PNG)
+      g.fillStyle(0x3a2f1a, 0.9); g.fillRoundedRect(x - 22, y - 22, 44, 44, 8);
+      g.lineStyle(1.5, 0xcaa05a, 0.8); g.strokeRoundedRect(x - 22, y - 22, 44, 44, 8);
     }
+    return g;
   }
 
   _crearHUD(width, height) {
@@ -228,29 +409,31 @@ export default class RoomScene extends Phaser.Scene {
     this.add.rectangle(0, 30, width, 1, 0x2a2a4a).setOrigin(0);
 
     this.add.text(10, 15, `👤 ${GameState.username}`, {
-      fontSize: '12px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '12px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0, 0.5);
 
     this.txtPuntos = this.add.text(width / 2 - 110, 15, `★ ${GameState.puntosTotal} pts`, {
-      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
 
     this.txtMonedas = this.add.text(width / 2, 15, `🪙 ${GameState.monedas}`, {
-      fontSize: '12px', color: '#ffd54f', fontFamily: 'monospace'
+      fontSize: '12px', color: '#ffd54f', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
 
     this.add.text(width / 2 + 110, 15, `⭐ ${GameState.totalEstrellas()}/${LEVELS.length * 3}`, {
-      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5, 0.5);
 
+    // "te quedan N de M" — M incluye la energía comprada (antes estaba fijo en 10,
+    // así que comprar energía no se reflejaba acá)
     const restantes = GameState.nivelesRestantesHoy();
-    this.add.text(width - 10, 15, `📅 ${restantes}/10 hoy`, {
-      fontSize: '12px', color: '#a5d6a7', fontFamily: 'monospace'
+    this.add.text(width - 10, 15, `📅 te quedan ${restantes} de ${GameState.cupoDelDia()}`, {
+      fontSize: '12px', color: '#a5d6a7', fontFamily: FUENTE
     }).setOrigin(1, 0.5);
 
     // cerrar sesión
     const logout = this.add.text(10, height - 10, 'cerrar sesión', {
-      fontSize: '10px', color: '#333', fontFamily: 'monospace'
+      fontSize: '10px', color: '#333', fontFamily: FUENTE
     }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
     logout.on('pointerover',  () => logout.setColor('#ef5350'));
     logout.on('pointerout',   () => logout.setColor('#333'));
@@ -264,7 +447,7 @@ export default class RoomScene extends Phaser.Scene {
       : `¡hola de nuevo, ${GameState.username}! nivel ${completados + 1} te espera`;
 
     const toast = this.add.text(width / 2, height - 20, msg, {
-      fontSize: '12px', color: '#ccc', fontFamily: 'monospace',
+      fontSize: '12px', color: '#ccc', fontFamily: FUENTE,
       backgroundColor: '#12122a', padding: { x: 14, y: 7 }
     }).setOrigin(0.5, 1).setAlpha(0);
 
@@ -280,13 +463,13 @@ export default class RoomScene extends Phaser.Scene {
     const panel = this.add.rectangle(width/2, height/2, 360, 140, 0x12122a)
       .setStrokeStyle(1, 0x2a2a4a);
     const t1 = this.add.text(width/2, height/2 - 28, '¡ya completaste tus 10 niveles de hoy!', {
-      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5);
     const t2 = this.add.text(width/2, height/2 + 2, 'vuelve mañana para continuar', {
-      fontSize: '11px', color: '#666', fontFamily: 'monospace'
+      fontSize: '11px', color: '#666', fontFamily: FUENTE
     }).setOrigin(0.5);
     const btn = this.add.text(width/2, height/2 + 36, '[ ok ]', {
-      fontSize: '13px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '13px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     btn.on('pointerdown', () => { [panel,t1,t2,btn].forEach(o=>o.destroy()); });
   }
@@ -294,29 +477,18 @@ export default class RoomScene extends Phaser.Scene {
   update() {
     const speed  = 160;
     const { left, right, up, down } = this.cursors;
-    const usingSprite = SpriteConfig.activo() && this.playerSprite;
 
     // velocidad — teclado o touch
     const td = this._touchDir;
     const vx = left.isDown ? -speed : right.isDown ? speed : td ? td.vx * speed : 0;
     const vy  = up.isDown   ? -speed : down.isDown   ? speed : td ? td.vy * speed : 0;
 
-    if (usingSprite) {
-      this.playerSprite.setVelocity(vx, vy);
-      // animaciones
-      if (vx < 0)       this.playerSprite.play('walk_left',  true);
-      else if (vx > 0)  this.playerSprite.play('walk_right', true);
-      else if (vy < 0)  this.playerSprite.play('walk_up',    true);
-      else if (vy > 0)  this.playerSprite.play('walk_down',  true);
-      else              this.playerSprite.play('idle',        true);
-    } else {
-      this.player.setVelocity(vx, vy);
-      this._dibujarPersonajePlaceholder(this.player.x, this.player.y);
-    }
+    this.player.setVelocity(vx, vy);
+    this._aplicarPose(this._direccionDe(vx, vy));
+    this._seguirAlCuerpo();
 
     // proximidad a workbench y tienda
-    const px = usingSprite ? this.playerSprite.x : this.player.x;
-    const py = usingSprite ? this.playerSprite.y : this.player.y;
+    const px = this.player.x, py = this.player.y;
 
     const distWB = Phaser.Math.Distance.Between(px, py, this.WORKBENCH_POS.x, this.WORKBENCH_POS.y);
     const distTD = Phaser.Math.Distance.Between(px, py, this.TIENDA_POS.x, this.TIENDA_POS.y);
@@ -341,6 +513,7 @@ export default class RoomScene extends Phaser.Scene {
 
   // entra a workbench o tienda según cuál esté cerca
   _interactuar() {
+    if (this.editMode) return;   // en el editor, E exporta el layout (no entra a nada)
     if (this.cercaDeTienda)        this.scene.start('StoreScene');
     else if (this.cercaDelWorkbench) this._entrarAlWorkbench();
   }
@@ -364,17 +537,17 @@ export default class RoomScene extends Phaser.Scene {
     const panel = this.add.rectangle(width/2, height/2, 380, 140, 0x12122a)
       .setStrokeStyle(1, 0xfff176);
     const t1 = this.add.text(width/2, height/2 - 28, 'este nivel es de un pack bloqueado', {
-      fontSize: '12px', color: '#fff176', fontFamily: 'monospace'
+      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
     }).setOrigin(0.5);
     const t2 = this.add.text(width/2, height/2 + 2, 'desbloquéalo en la 🛒 tienda', {
-      fontSize: '11px', color: '#666', fontFamily: 'monospace'
+      fontSize: '11px', color: '#666', fontFamily: FUENTE
     }).setOrigin(0.5);
     const btn = this.add.text(width/2, height/2 + 36, '[ ir a la tienda ]', {
-      fontSize: '13px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '13px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     btn.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
     const cerrar = this.add.text(width/2, height/2 + 58, '[ cerrar ]', {
-      fontSize: '10px', color: '#444', fontFamily: 'monospace'
+      fontSize: '10px', color: '#444', fontFamily: FUENTE
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     cerrar.on('pointerdown', () => [panel,t1,t2,btn,cerrar].forEach(o=>o.destroy()));
   }
@@ -398,7 +571,7 @@ export default class RoomScene extends Phaser.Scene {
         .setDepth(10);
       // flecha: sprite (ui.btn_*) o glifo de texto como fallback
       const arr = SpriteConfig.colocar(this, 'ui', d.key, d.x, d.y, () => this.add.text(d.x, d.y, d.label, {
-        fontSize: '22px', color: '#4fc3f7', fontFamily: 'monospace'
+        fontSize: '22px', color: '#4fc3f7', fontFamily: FUENTE
       }).setOrigin(0.5)).setDepth(11);
       if (arr instanceof Phaser.GameObjects.Image) arr.setDisplaySize(btnSz * 0.7, btnSz * 0.7);
 
@@ -426,7 +599,7 @@ export default class RoomScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .setDepth(10);
     this.add.text(width - 60, height - 80, '[ E ]', {
-      fontSize: '14px', color: '#4fc3f7', fontFamily: 'monospace'
+      fontSize: '14px', color: '#4fc3f7', fontFamily: FUENTE
     }).setOrigin(0.5).setDepth(11);
 
     eBg.on('pointerdown', () => this._interactuar());

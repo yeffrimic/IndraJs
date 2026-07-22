@@ -1,220 +1,405 @@
-# ⚡ IndraJS
+# IndraJS — Circuito Puzzle
 
-> Juego educativo de electrónica para niños y principiantes — aprende conectando circuitos como una serpiente.
+Juego educativo de electrónica para niños de 6 a 8 años. Una serpiente representa la corriente
+eléctrica: el jugador la maniobra para conectar los componentes de un circuito en el orden correcto
+y encenderlo.
 
-![demo](https://img.shields.io/badge/demo-live-4caf50?style=flat-square)
-![phaser](https://img.shields.io/badge/Phaser-3.60-4fc3f7?style=flat-square)
-![license](https://img.shields.io/badge/licencia-MIT-ce93d8?style=flat-square)
-![made in](https://img.shields.io/badge/hecho%20en-Guatemala-4fc3f7?style=flat-square)
-
----
-
-## 🎮 ¿Qué es?
-
-**Circuito Puzzle** es un videojuego educativo top-down donde el jugador controla una serpiente que representa el flujo de corriente eléctrica. El reto es maniobrar la serpiente para conectar los componentes electrónicos en el orden correcto — batería → resistencia → capacitor → LED — y completar el circuito.
-
-Cuando la serpiente toca la batería, la **corriente recorre su cuerpo iluminándolo** y los componentes se encienden con partículas al conectarse. Hay una **tienda 🛒** para gastar las monedas ganadas en energía, packs de niveles, pistas y muebles para el cuarto.
-
-Diseñado para niños y estudiantes sin conocimiento previo de electrónica, con una mecánica intuitiva de niveles diarios que progresa en dificultad.
+![Phaser](https://img.shields.io/badge/Phaser-3.60-4fc3f7?style=flat-square)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6_modules-f7df1e?style=flat-square)
+![Sin build](https://img.shields.io/badge/build-ninguno-4caf50?style=flat-square)
+![Licencia](https://img.shields.io/badge/licencia-MIT-ce93d8?style=flat-square)
 
 ---
 
-## 🕹️ Cómo jugar
+## Qué es
+
+El jugador tiene un cuarto propio. Se acerca al banco de trabajo y entra a un puzzle: un tablero con
+componentes electrónicos —batería, resistencia, capacitor, LED, interruptor— y una serpiente que
+debe pasar por ellos **en orden** para cerrar el circuito. Cuando la corriente llega al LED, se
+enciende.
+
+Las monedas ganadas se gastan en una tienda: tableros más grandes (que traen niveles nuevos),
+pistas, energía para jugar más tiempo, y muebles para decorar el cuarto.
+
+### Público objetivo
+
+**Niños de 6 a 8 años que apenas leen o todavía no leen.** Es la restricción de diseño que gobierna
+todo lo demás:
+
+> Se tiene que entender **viéndolo**, no leyéndolo.
+
+Si una pantalla necesita que el niño lea para saber qué hacer, esa pantalla está fallando.
+
+---
+
+## Cómo se juega
 
 ### En el cuarto
-- **Flechas** — mover al personaje
-- **E** — interactuar con el objeto cercano (cuando estés cerca)
-- Acércate al **⚡ WORKBENCH** para iniciar un puzzle
-- Acércate a la **🛒 TIENDA** para gastar tus monedas
+
+| Control | Acción |
+|---|---|
+| Flechas | mover al personaje |
+| `E` | interactuar con lo que esté cerca |
+
+Acercarse al **banco de trabajo** abre un puzzle; acercarse a la **tienda** abre el catálogo.
 
 ### En el puzzle
-- **Flechas** — mover la serpiente
-- **R** — reiniciar el nivel
-- **💡 pista** — revela el orden de los componentes (gastás 1 de tus 3 pistas)
-- Maniobrá la serpiente sobre la **batería**: la corriente ilumina su cuerpo
-- Cuando todos los componentes estén alineados, ¡el circuito se completa!
-- Si hay un **switch**, haz click en él para cerrarlo
+
+| Control | Acción |
+|---|---|
+| Flechas | mover la serpiente |
+| `R` | reiniciar el nivel |
+| Clic sobre un interruptor | abrirlo o cerrarlo |
+
+La serpiente **entra al tablero por una esquina**: al principio sólo se ve la cabeza y el cuerpo va
+saliendo detrás a medida que avanza. La esquina cambia en cada nivel.
+
+El objetivo es que, al terminar, cada componente quede bajo el segmento de cuerpo que le corresponde.
+Cuando la serpiente toca la batería, la corriente recorre su cuerpo iluminándolo. Si hay
+interruptores, la corriente se detiene en el primero que esté abierto.
 
 ### Componentes
-| Símbolo | Componente | Color |
-|---------|-----------|-------|
-| ○ | Batería (BAT) | Azul cian |
-| □ | Resistencia (R) | Morado |
-| △ | Capacitor (CAP) | Verde agua |
-| ○ | LED | Naranja |
-| ⊣ | Switch (SW) | Amarillo |
+
+| Componente | Sigla | Color |
+|---|---|---|
+| Batería | `BAT` | cian |
+| Resistencia | `R` | morado |
+| Capacitor | `CAP` | verde agua |
+| LED | `LED` | naranja |
+| Interruptor | `SW` | amarillo |
+
+Todo nivel tiene **siempre** al menos una batería, una resistencia y un LED. La batería abre la
+secuencia y el LED la cierra, sin excepción.
 
 ---
 
-## 🗂️ Estructura del proyecto
+## Progresión
 
-```
-circuito-puzzle/
-├── index.html          ← juego principal
-├── editor.html         ← editor de niveles
-├── tester.html         ← probador de niveles
-├── src/
-│   ├── main.js         ← configuración de Phaser
-│   ├── levels.js       ← niveles del juego (+ packs comprables)
-│   ├── tienda.js       ← catálogo de la tienda
-│   ├── SpriteConfig.js ← configuración de sprites
-│   ├── state/
-│   │   └── GameState.js ← progreso, monedas, pistas, compras
-│   └── scenes/
-│       ├── BootScene.js
-│       ├── LoginScene.js
-│       ├── RoomScene.js
-│       ├── PuzzleScene.js
-│       └── StoreScene.js ← la tienda
-└── assets/             ← sprites (cuando estén disponibles)
-```
+**50 niveles** en tres tamaños de tablero. Cada tamaño estrena un componente, y el tablero más
+grande es la recompensa que se compra en la tienda.
+
+| Niveles | Tablero | Qué enseña | Acceso |
+|---|---|---|---|
+| 1–10 | 5×5 | batería → resistencia → LED | libre |
+| 11–20 | 6×6 | el **interruptor** | tablero 6×6 (400 monedas) |
+| 21–40 | 6×6 | todo combinado | incluido en esa compra |
+| 41–50 | 8×8 | el **capacitor** y recorridos largos | tablero 8×8 (700 monedas) |
+
+Todos los circuitos son **en serie**: un solo camino, una sola serpiente. Los circuitos en paralelo
+requieren varias serpientes simultáneas y están reservados en la tienda como *próximamente*.
 
 ---
 
-## 🛠️ Herramientas incluidas
+## Empezar
 
-### Editor de niveles (`editor.html`)
-Diseña niveles visualmente con un grid clickeable.
-
-1. Seleccioná una herramienta (BAT, R, CAP, LED, SW)
-2. Haz click en el grid para colocar componentes
-3. El orden se asigna automáticamente según la secuencia de colocación — la batería siempre va primero y el LED siempre al final
-4. La longitud de la serpiente se calcula automáticamente con BFS
-5. Presioná **guardar nivel** — se guarda en `localStorage`
-6. Cuando tengas varios listos, **exportar levels.js** descarga el archivo
-
-### Probador de niveles (`tester.html`)
-Prueba cualquier nivel guardado antes de integrarlo al juego.
-
-- Seleccioná el nivel del dropdown
-- Jugalo completo con flechas o botones táctiles
-- Ve los movimientos y el puntaje obtenido
-
----
-
-## 🚀 Correr localmente
+El proyecto no tiene dependencias, ni instalación, ni paso de compilación. Sólo hace falta un
+servidor estático:
 
 ```bash
-# clonar el repo
-git clone https://github.com/TU_USUARIO/circuito-puzzle.git
-cd circuito-puzzle
+git clone <repo>
+cd IndraJs
 
-# servir con Node.js
-npx serve .
-
-# o con Python
-python -m http.server
-
-# abrir en el navegador
-# http://localhost:3000
+npx serve .          # o: python -m http.server
 ```
 
-> ⚠️ No abrir `index.html` directamente con doble click — el navegador bloquea los módulos ES6 desde `file://`. Siempre usar un servidor local.
+Abrir `http://localhost:3000` (o el puerto que informe el servidor).
+
+> **No abrir `index.html` con doble clic.** El navegador bloquea los módulos ES6 desde `file://` y
+> el juego no arranca.
 
 ---
 
-## 🎨 Agregar sprites propios
+## Arquitectura
 
-El juego funciona con gráficos placeholder por defecto. Cuando tengas tus sprites:
+```
+index.html               carga Phaser desde CDN y src/main.js
+editor.html              editor de niveles          ⚠ ver "Estado de las herramientas"
+tester.html              probador de niveles        ⚠ ídem
+style-preview.html       mockup de estilo visual
 
-1. Copiá los archivos a `assets/`
-2. Abrí `src/SpriteConfig.js`
-3. Cambiá `USE_SPRITES: false` a `USE_SPRITES: true`
-4. Ajustá los paths y tamaños de frame según tus imágenes
+src/
+  main.js                configuración de Phaser, define window.isMobile
+  levels.js              los 50 niveles + el currículo por conceptos
+  tienda.js              catálogo y precios
+  SpriteConfig.js        registro central de assets y tipografía
+  ClayUI.js              paleta y widgets del estilo plastilina
+  dev-guard.js           define window.__DEV__ (script clásico, corre primero)
+  Dev.js                 API de modo desarrollo para las escenas
+  state/
+    GameState.js         progreso, monedas, estrellas, tiempos, cupo diario, compras
+  scenes/
+    BootScene.js         precarga de assets
+    LoginScene.js        selección de perfil
+    RoomScene.js         el cuarto: hub con física arcade
+    LevelSelectScene.js  selector de niveles por concepto
+    PuzzleScene.js       el puzzle completo
+    StoreScene.js        la tienda
+
+assets/                  arte de plastilina: fondos, muebles, personajes, ui, grid
+```
+
+**Flujo de datos.** Todo el progreso vive en el singleton `GameState`, que persiste en `localStorage`
+bajo la clave `circuito_perfil_<nombre>`. Las escenas no duplican estado: leen y escriben ahí.
+
+**Restricciones del proyecto.** Phaser 3.60 se carga por `<script>` desde CDN y es una **global** —
+nunca se importa. Módulos ES6 nativos, sin bundler ni `package.json`. Resolución lógica fija de
+800×600 con escalado `FIT`.
+
+---
+
+## Formato de niveles
+
+Los niveles se escriben como se ven, con el helper `G()`:
 
 ```js
-// src/SpriteConfig.js
-const SpriteConfig = {
-  USE_SPRITES: true,  // ← cambiar esto
-  personaje: {
-    path:   'assets/personaje.png',
-    frameW: 32,   // ← ajustar al tamaño de tu spritesheet
-    frameH: 48,
-  },
-  // ...
-};
+// serpiente 12 · óptimo 16 · nace no
+{ name: 'dos interruptores', diff: 2, optimo: 16, nace: 'no', pack: 'tablero6', grid: G(
+  '.  .  .  .  .  .',
+  '.  .  .  .  .  .',
+  '.  l5 .  .  .  .',
+  '.  .  .  b1 .  s2',
+  '.  s4 .  .  r3 .',
+  '.  .  .  .  .  .',
+)},
 ```
+
+Cada casilla es `.` (vacía) o `<símbolo><orden>`, donde el símbolo es `b`, `r`, `c`, `l` o `s`. El
+número indica el orden relativo; `_parseComponents` lo renormaliza poniendo la batería primero y el
+LED al final.
+
+| Campo | Significado |
+|---|---|
+| `optimo` | mínimo de pasos con el que se gana — la meta de 3★ |
+| `nace` | esquina de entrada: `ne`, `no`, `se`, `so` (por defecto `ne`) |
+| `pack` | tablero que hay que comprar para jugarlo |
+
+### Reglas que no se pueden romper
+
+- **El largo de la serpiente no se fija a mano.** Lo calcula `PuzzleScene` por BFS entre componentes
+  consecutivos, más una cabeza y una cola vacías.
+- **`optimo` va medido, no estimado.** Se calcula fuera de línea resolviendo el nivel con las reglas
+  exactas del juego. Suele coincidir con `distancia_a_la_batería + largo - 2`, y **cuando no
+  coincide, el nivel está mal diseñado**: significa que el camino directo deja el cuerpo tapando el
+  recorrido posterior y obliga al jugador a dar vueltas sin motivo aparente. Lo primero a probar es
+  otra esquina de entrada; suele alcanzar.
+- **Con separación mínima de 2 entre componentes, N componentes exigen un largo de al menos
+  `2*(N-1)+3`.** Pedir menos es imposible por aritmética, no por diseño.
+- Mover un componente o cambiar `nace` invalida el `optimo`: hay que volver a medirlo.
 
 ---
 
-## 🧠 Sistema de puntaje y economía
+## Estrellas, tiempos y economía
 
-| Acción | Puntos |
-|--------|--------|
-| Completar nivel | 300 − (movimientos × 5) |
-| Mínimo garantizado | 20 pts |
-| Máximo por nivel | depende del óptimo (~150–235, la serpiente nace lejos y debe viajar) |
-
-- El puntaje y las **monedas** se guardan por perfil en `localStorage`. Ganás monedas iguales al puntaje, pero **gastarlas en la tienda no baja tu récord**.
-- Se registra el **mejor puntaje por nivel**: al rejugar, solo sumás la **diferencia** si superás tu marca anterior — así podés exprimir cada puzzle hasta el óptimo sin farmeo.
-- Límite de **10 niveles nuevos por día**; los replays no consumen el cupo. Con **energía** (tienda) podés jugar más niveles ese día.
-
-### ⭐ Estrellas (maestría)
-
-Cada nivel tiene un **óptimo de pasos** exacto = `(largo de la serpiente − 1) + distancia del nacimiento a la batería`. Según qué tan cerca quedes:
+### Estrellas
 
 | Estrellas | Condición |
-|-----------|-----------|
+|---|---|
 | ★★★ | resuelto en el óptimo |
 | ★★ | hasta 25 % por encima del óptimo |
 | ★ | completado |
 
-Las mejores estrellas por nivel se guardan y se suman en el cuarto (`⭐ total`).
+### Monedas
 
-## 🛒 Tienda
+Las monedas dependen **sólo de las estrellas**, no de los movimientos:
 
-Gastá tus monedas en cuatro categorías:
+| | 1★ | 2★ | 3★ |
+|---|---|---|---|
+| Monedas por nivel | 25 | 50 | 70 |
 
-| Categoría | Qué compra |
-|-----------|-----------|
-| ⚡ Energía | Más niveles para jugar hoy (supera el límite diario) |
-| 🎮 Niveles | Packs de niveles (intermedios; circuitos paralelos *próximamente*) |
-| ✨ Mejoras | Recarga de pistas (+3) |
-| 🪑 Muebles | Decoración para tu cuarto (planta, lámpara, póster, tapete) |
+Rejugar paga **sólo la mejora**: subir de 2★ a 3★ otorga la diferencia; repetir el mismo resultado no
+otorga nada. Así se puede exprimir cada puzzle sin farmeo infinito.
 
----
+El **puntaje** (`300 − movimientos × 5`) sigue existiendo como récord por nivel, pero no es la
+moneda: es una marca personal.
 
-## 📦 Tecnologías
+### Precios
 
-- **[Phaser 3.60](https://phaser.io)** — motor de videojuegos HTML5
-- **JavaScript ES6** — módulos nativos, sin bundler
-- **localStorage** — persistencia de datos sin backend
-- **BFS (Breadth-First Search)** — cálculo automático de longitud de serpiente
-- **Partículas + tweens de Phaser** — efectos de corriente, energía y celebración
-- **Gráficos vectoriales** generados en runtime — funciona sin assets (placeholders)
+Están calculados sobre lo anterior, con tres reglas (documentadas en `src/tienda.js`):
 
----
+1. **El tablero siguiente se compra con una media de 2★, no con una de 1★.** Los 10 niveles gratis
+   dan 500 monedas a 2★ y sólo 250 a 1★; el tablero 6×6 cuesta 400.
+2. **Como mucho 1-2 muebles cada 20 niveles.** Con media de 2★, los 50 niveles alcanzan para 5 de
+   los 17 muebles.
+3. **No se compra medio juego al principio.** Tras pagar el tablero, a 2★ sobran 100 monedas: ni el
+   mueble más barato.
 
-## 🌱 Cómo ha crecido
+También hay un **cupo de 10 niveles nuevos por día** (los replays no lo consumen), ampliable
+comprando energía. El contador se reinicia solo al cambiar el día, incluso con el juego abierto.
 
-- **v0.1 — Base.** Cuarto top-down + puzzle de la serpiente, 10 niveles, perfiles y puntaje.
-- **v0.2 — Tienda 🛒.** Moneda separada, energía (más niveles por día), packs de niveles, mejoras y muebles para el cuarto.
-- **v0.3 — Serpiente viva ⚡.** La corriente ilumina el cuerpo desde la batería, partículas al conectar cada componente, números de orden más grandes y pistas bajo demanda (3 gratis, recargables en la tienda).
-- **v0.4 — Economía pulida.** Récord por nivel: los replays solo premian la mejora, sin farmeo infinito.
+### Tiempos
 
----
+Cada nivel mide cuánto tarda el jugador y guarda un resumen por nivel:
 
-## 🗺️ Roadmap
+```js
+tiempos: { 13: { mejor: 31, ultimo: 47, intentos: 3 } }   // segundos
+```
 
-- [x] Tienda con monedas, energía, packs, pistas y muebles
-- [x] Animaciones de la serpiente (corriente, partículas, energía)
-- [x] Récords por nivel y mejora en replays
-- [ ] Sprites y animaciones del personaje (pixel art)
-- [ ] **Circuitos paralelos** — nueva mecánica (ya reservado en la tienda)
-- [ ] Componentes avanzados (transistores, diodos)
-- [ ] Sonidos y música ambiente
-- [ ] Tilemap con Tiled
-- [ ] Backend para guardar progreso en la nube
+Se guarda el resumen y no el historial completo para no inflar el `localStorage`. Es la base para el
+análisis de dificultad por nivel.
 
 ---
 
-## 👤 Autor
+## Guía visual
 
-Hecho con ❤️ por **Yeffri Salazar** — Director de [Creabot](https://creabot.us), Guatemala.
+El juego enseña el orden sin depender de que el niño sepa leer:
 
+- **El próximo componente late.** Un halo y un aro pulsante marcan a dónde ir ahora. Empieza siempre
+  en la batería y avanza solo cuando la cabeza pisa el componente actual. Indica el destino, no el
+  camino: rutear la serpiente sigue siendo del jugador.
+- **Camino punteado.** Piedritas del color del destino marcan la ruta entrada → batería → … → LED.
+  Es **gratis en los 5 primeros niveles**; del sexto en adelante lo enciende el botón de pista.
+- **Números y siglas** siguen presentes para quien sí sabe leer, sin estorbar a quien no.
 
 ---
 
-## 📄 Licencia
+## Arte
 
-MIT — libre para usar, modificar y distribuir con atribución.
+Todo el arte se registra en `src/SpriteConfig.js`. Las escenas nunca hacen `this.load.image` suelto:
+agregar una entrada ahí la precarga sola. Cada asset dibuja su sprite si existe y cae a un dibujo
+vectorial si no.
+
+```js
+muebles: {
+  planta: { key: 'mueble_planta', path: 'assets/muebles/planta.png', escala: 0.2 },
+  pelota: { key: 'mueble_pelota', path: 'assets/muebles/pelota.png', escala: 0.14,
+            listo: false },   // el arte todavía no existe
+},
+```
+
+`listo: false` marca lo que aún no está dibujado: no se precarga (evita 404s en consola) y la escena
+usa el placeholder. **Esa lista es el checklist de arte pendiente.**
+
+Los personajes son PNGs sueltos por pose —no un spritesheet— con dos valores medidos sobre el canal
+alfa para que la figura no se hunda ni crezca al girar:
+
+```js
+nino_izq: { key: 'pj_nino_izq', path: 'assets/personajes/nino_izq.png',
+            anclaY: 0.916,      // dónde caen los pies dentro del PNG
+            altoFigura: 393 },  // alto real de la figura en px
+```
+
+> Reemplazar un PNG de personaje obliga a volver a medir esos dos valores.
+
+---
+
+## Herramientas
+
+### Editor de niveles (`editor.html`)
+
+Grid clickeable para colocar componentes. El orden se asigna según la secuencia de colocación y la
+longitud de la serpiente se calcula por BFS. Exporta a `levels.js`.
+
+### Probador (`tester.html`)
+
+Juega un nivel guardado antes de integrarlo.
+
+### Estado de las herramientas
+
+Las dos quedaron **desincronizadas del juego** y hay que ponerlas al día antes de usarlas para
+producir contenido:
+
+| Herramienta | Qué le falta |
+|---|---|
+| `editor.html` | Exporta sin `optimo` ni `nace`, y en formato de array crudo en vez de `G()`. Un nivel creado ahí entra siempre por la esquina `ne` y su meta de 3★ queda estimada, no medida. |
+| `tester.html` | Conserva su propia copia de `buildInitialSnake` con la versión antigua (serpiente desplegada sobre el tablero). **Simula un juego distinto al real.** |
+
+Mientras tanto los niveles se generan y verifican con scripts fuera del repo. El verificador
+comprueba, para los 50: que se ganen exactamente en su `optimo` y no en menos, que la serpiente nazca
+colapsada en una casilla, que haya siempre batería, resistencia y LED, y que los capacitores sólo
+aparezcan en el tablero 8×8.
+
+### Modo desarrollo
+
+Los editores y las páginas sueltas **sólo abren en `localhost`** (`127.0.0.1`, `::1`). Publicado, no
+existen para el usuario final: los parámetros se ignoran y el juego arranca en el login.
+
+| Atajo | Qué hace |
+|---|---|
+| `?nivel=N` | entra directo a ese puzzle (perfil `Dev`, todo desbloqueado) |
+| `?sel` | selector de niveles |
+| `?store` | tienda |
+| `?editroom` | editor del cuarto — arrastrar objetos, `[E]` exportar, `[R]` reset |
+| `?editstore` | editor de la tienda |
+
+Para probar desde el celular por IP de LAN, habilitarlo una vez en la consola de esa pestaña:
+
+```js
+localStorage.circuito_dev = '1'
+```
+
+La regla vive en un solo lugar: `src/dev-guard.js` define `window.__DEV__`, y las escenas la
+consultan vía `src/Dev.js`.
+
+> Esto **no es seguridad**: el juego corre entero en el cliente y cualquiera con la consola se lo
+> saltea. Sirve para que un niño no llegue por accidente. Para el cierre real, no subir
+> `editor.html`, `tester.html` ni `style-preview.html` al hosting.
+
+---
+
+## Roadmap
+
+**Hecho**
+
+- [x] 50 niveles con curva de dificultad verificada automáticamente
+- [x] Economía atada a las estrellas, con precios calibrados
+- [x] Arte de plastilina en fondos, muebles, íconos y personajes
+- [x] Guía visual del orden: camino punteado y brillo progresivo
+- [x] Registro de tiempos por nivel
+- [x] Modo desarrollo aislado del usuario final
+
+**Prioridad alta** — sin esto un niño de 6 no puede jugar solo
+
+- [ ] Quitar las siglas `BAT / R / CAP / LED` del tablero
+- [ ] Onboarding sin texto: que el primer nivel se enseñe solo
+
+**Prioridad media**
+
+- [ ] Audio: efectos, música y voz opcional
+- [ ] Pantalla para elegir personaje (el estado ya se guarda)
+- [ ] Botones con ícono; esconder los números de adulto ("mov", "óptimo")
+
+**Pulido y deuda**
+
+- [ ] Transiciones entre pantallas y celebración al ganar
+- [ ] Poner al día `editor.html` y `tester.html`
+- [ ] 3 piezas de arte pendientes: `tile_head`, `tile_body`, `pelota`
+- [ ] Profundidad en el cuarto: caminar por detrás de los muebles
+
+**Más adelante**
+
+- [ ] Circuitos paralelos (requiere varias serpientes simultáneas)
+- [ ] Componentes avanzados: transistores, diodos
+- [ ] Backend para guardar progreso y analizar uso
+
+---
+
+## Historial
+
+| Versión | Cambios |
+|---|---|
+| v0.1 | Cuarto top-down y puzzle de la serpiente, 10 niveles, perfiles y puntaje |
+| v0.2 | Tienda: moneda separada, energía, packs, mejoras y muebles |
+| v0.3 | Corriente que ilumina el cuerpo, partículas al conectar, pistas bajo demanda |
+| v0.4 | Récord por nivel: los replays sólo premian la mejora |
+| v0.5 | Arte de plastilina, tipografía redondeada, selector rediseñado, modo desarrollo aislado |
+| v0.6 | 50 niveles con progresión por tamaño de tablero. Se corrigieron dos fallas que hacían 44 de 50 niveles irresolubles y volvían inalcanzable la meta de 3★ |
+| v0.7 | Economía atada a las estrellas. Guía visual del orden y registro de tiempos |
+
+---
+
+## Stack
+
+- **[Phaser 3.60](https://phaser.io)** — motor HTML5, cargado desde CDN
+- **JavaScript ES6** — módulos nativos, sin bundler ni dependencias
+- **localStorage** — persistencia sin backend
+- **BFS** — cálculo automático de la longitud de la serpiente
+
+---
+
+## Autor
+
+**Yeffri Salazar** — [Creabot](https://creabot.us), Guatemala.
+
+## Licencia
+
+MIT.
