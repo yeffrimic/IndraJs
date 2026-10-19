@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport-fit=cover: en teléfonos con notch el juego usa toda la pantalla y los
+       márgenes seguros los pone #game-container con env(safe-area-inset-*) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Circuito">
+  <meta name="theme-color" content="#2a1a0e">
+  <title>Circuito Puzzle</title>
+  <!-- "Agregar a pantalla de inicio": abre en pantalla completa y horizontal, como una app -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icono-180.png">
+  <link rel="icon" type="image/png" href="assets/icono-192.png">
+  <!-- fuente redondeada infantil (ver FUENTE en src/SpriteConfig.js) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none; user-select: none;
+      touch-action: none;
+    }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;     /* sin "rebote" ni tirar-para-recargar en el celular */
+      background: #2a1a0e;
+    }
+    canvas {
+      display: block;
+      touch-action: none;
+      margin: 0 auto;
+    }
+    /* El contenedor respeta el notch y la barra de inicio; Phaser (Scale.FIT) se ajusta a él */
+    #game-container {
+      position: fixed;
+      top: env(safe-area-inset-top, 0px);
+      bottom: env(safe-area-inset-bottom, 0px);
+      left: env(safe-area-inset-left, 0px);
+      right: env(safe-area-inset-right, 0px);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Girar el dispositivo: cualquier pantalla táctil parada (teléfono o tableta).
+       Sin texto que leer: el teléfono gira solo en la animación. */
+    #rotate-msg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #2a1a0e;
+      color: #f7e7bd;
+      font-family: "Fredoka", "Comic Sans MS", "Trebuchet MS", sans-serif;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      z-index: 9999;
+      text-align: center;
+      padding: 20px;
+    }
+    #rotate-msg .tel {
+      width: 90px; height: 150px; border-radius: 18px;
+      background: #f08a3c; border: 6px solid #8a3a10; box-shadow: 0 8px 0 #5a2a0a;
+      position: relative; animation: girar 2.2s ease-in-out infinite;
+    }
+    #rotate-msg .tel::after {
+      content: ""; position: absolute; inset: 12px 10px 26px; border-radius: 6px; background: #fdf3dc;
+    }
+    #rotate-msg .flecha { font-size: 54px; color: #f6c945; line-height: 1; }
+    #rotate-msg .chico { font-size: 13px; color: #c8a070; }
+    @keyframes girar { 0%, 25% { transform: rotate(0deg); } 55%, 100% { transform: rotate(-90deg); } }
+    /* Cargador en HTML puro: se ve al instante, mientras baja Phaser (~1 MB) en redes
+       lentas de teléfono. main.js lo quita cuando arranca el juego. */
+    #cargando {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #2a1a0e; z-index: 50;
+    }
+    #cargando .bolita {
+      width: 34px; height: 34px; margin: 0 8px; border-radius: 50%;
+      background: #f08a3c; border: 5px solid #a35a1e; animation: rebote .9s ease-in-out infinite;
+    }
+    #cargando .bolita:nth-child(2) { background: #f6c945; border-color: #b8901a; animation-delay: .15s; }
+    #cargando .bolita:nth-child(3) { background: #7cc35a; border-color: #4a8a34; animation-delay: .3s; }
+    @keyframes rebote { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-26px); } }
+    @media (orientation: portrait) and (pointer: coarse) {
+      #rotate-msg { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div id="rotate-msg">
+    <div class="tel"></div>
+    <div class="flecha">↺</div>
+    <div class="chico">el juego funciona en horizontal</div>
+  </div>
+  <div id="cargando"><div class="bolita"></div><div class="bolita"></div><div class="bolita"></div></div>
+  <div id="game-container"></div>
+  <!-- define window.__DEV__ — debe correr antes que los módulos del juego -->
+  <script src="src/dev-guard.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

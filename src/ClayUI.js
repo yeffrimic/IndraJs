@@ -246,6 +246,16 @@ export const ICONOS = {
     g.fillRoundedRect(-s * 0.26, -s * 0.4, s * 0.52, s * 0.8, { tl: s * 0.2, tr: s * 0.2, bl: 0, br: 0 });
     g.fillStyle(f, 1); g.fillCircle(s * 0.12, s * 0.04, s * 0.06);
   },
+  libro(g, s, c, f) {   // libro abierto (el manual)
+    g.fillStyle(c, 1);
+    g.fillPoints([{ x: -s * 0.44, y: -s * 0.26 }, { x: -s * 0.03, y: -s * 0.18 }, { x: -s * 0.03, y: s * 0.34 }, { x: -s * 0.44, y: s * 0.26 }], true);
+    g.fillPoints([{ x: s * 0.44, y: -s * 0.26 }, { x: s * 0.03, y: -s * 0.18 }, { x: s * 0.03, y: s * 0.34 }, { x: s * 0.44, y: s * 0.26 }], true);
+    g.lineStyle(s * 0.05, f, 1);
+    [-0.06, 0.06, 0.18].forEach(dy => {
+      g.beginPath(); g.moveTo(-s * 0.36, -s * 0.12 + s * dy); g.lineTo(-s * 0.11, -s * 0.07 + s * dy); g.strokePath();
+      g.beginPath(); g.moveTo(s * 0.36, -s * 0.12 + s * dy); g.lineTo(s * 0.11, -s * 0.07 + s * dy); g.strokePath();
+    });
+  },
   regalo(g, s, c, f) {  // paquetito con moño
     g.fillStyle(c, 1);
     g.fillRoundedRect(-s * 0.36, -s * 0.12, s * 0.72, s * 0.5, s * 0.06);
@@ -497,6 +507,13 @@ export function botonSonido(scene, x, y, tam = 46, depth = 150) {
   };
   crear();
   return () => b;
+}
+
+// Abre el manual ilustrado (es para el adulto: va en una pestaña aparte, así el juego
+// queda donde estaba). Si el navegador bloquea la pestaña, navega en la misma.
+export function abrirManual() {
+  const w = window.open('manual.html', '_blank', 'noopener');
+  if (!w) window.location.href = 'manual.html';
 }
 
 // Cartel flotante de plastilina (toast). Reemplaza al texto con backgroundColor.

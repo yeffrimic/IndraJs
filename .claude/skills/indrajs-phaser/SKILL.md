@@ -10,7 +10,7 @@ alinear componentes en orden (BAT → R → CAP → LED, y cierra SW si lo hay) 
 
 ## Stack y restricciones DURAS (no romper)
 
-- **Phaser 3.60.0**, cargado por `<script>` desde CDN en `index.html`. `Phaser` es **global** — NO usar `import Phaser`.
+- **Phaser 3.60.0**, cargado por `<script>` desde CDN en `jugar.html` (el juego; `index.html` es la portada). `Phaser` es **global** — NO usar `import Phaser`.
 - **ES6 modules nativos** (`import`/`export default`). **Sin bundler, sin npm, sin `package.json`, sin build step.** No agregar dependencias ni `node_modules`.
 - Cada archivo se sirve tal cual al navegador. Para probar **siempre con servidor local** (`npx serve .` o `python -m http.server`) — nunca `file://` (rompe los módulos).
 - Persistencia: **solo `localStorage`**, sin backend. Toda escritura pasa por `GameState`.
@@ -53,7 +53,8 @@ en estilos de `text` → string `'#rrggbb'`. Conversión usada: `` `#${color.toS
 ## Arquitectura
 
 ```
-index.html  → carga Phaser CDN + src/main.js (entry, type=module)
+jugar.html  → el juego: carga Phaser CDN + src/main.js (entry, type=module)
+index.html  → portada (landing) con enlaces a jugar.html y manual.html
 src/main.js → config de Phaser, define window.isMobile y window.game, scene order:
               [BootScene, LoginScene, RoomScene, PuzzleScene]
 src/scenes/

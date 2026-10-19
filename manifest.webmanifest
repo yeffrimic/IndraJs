@@ -3,7 +3,7 @@
   "short_name": "Circuito",
   "description": "Juego de electricidad para chicos de 6 a 8 años: guía la serpiente y prende la luz.",
   "lang": "es",
-  "start_url": "./",
+  "start_url": "./jugar.html",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",

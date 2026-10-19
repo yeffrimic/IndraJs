@@ -1,6 +1,6 @@
 // Dev.js — puerta única a las vistas de configuración desde las escenas.
 // La regla de "esta máquina es de desarrollo" vive en src/dev-guard.js (cargado
-// como script clásico en index.html); acá sólo se lee el resultado.
+// como script clásico en jugar.html); acá sólo se lee el resultado.
 
 const Dev = {
 

@@ -3,7 +3,7 @@ import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido       from '../Sonido.js';
 import {
   CLAY, losa, boton, estrella, estiloTexto, hex, oscurecer,
-  entrarEscena, irA, aparecer, respirar,
+  entrarEscena, irA, aparecer, respirar, toque, abrirManual,
 } from '../ClayUI.js';
 
 const PERFILES = [
@@ -43,9 +43,15 @@ export default class LoginScene extends Phaser.Scene {
       aparecer(this, t, 250 + i * 70);
     });
 
-    this.add.text(width - 10, height - 8, 'v0.8 · circuito puzzle · creabot', {
-      fontSize: '10px', color: '#fff3d6', fontFamily: FUENTE,
-    }).setOrigin(1, 1).setAlpha(0.55);
+    // el manual, para el adulto que acompaña: libro arriba a la derecha
+    const tL = toque(54);
+    boton(this, width - 12 - tL / 2, 12 + tL / 2, { w: tL, fill: CLAY.naranja, icono: 'libro', onTap: abrirManual });
+
+    // créditos
+    this.add.text(width / 2, height - 8, 'Creabot  ·  @yeffrimic  ·  Priscila Ramírez @purishiry  ·  v0.8', {
+      fontSize: window.isMobile ? '13px' : '11px', color: '#fff3d6', fontFamily: FUENTE,
+      stroke: '#5a3a1a', strokeThickness: 3,
+    }).setOrigin(0.5, 1).setAlpha(0.8);
   }
 
   // ── logo de plastilina: cada letra de un color, entra saltando y después ondula ──

@@ -1,110 +1,347 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <!-- viewport-fit=cover: en teléfonos con notch el juego usa toda la pantalla y los
-       márgenes seguros los pone #game-container con env(safe-area-inset-*) -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Circuito">
-  <meta name="theme-color" content="#2a1a0e">
-  <title>Circuito Puzzle</title>
-  <!-- "Agregar a pantalla de inicio": abre en pantalla completa y horizontal, como una app -->
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="assets/icono-180.png">
-  <link rel="icon" type="image/png" href="assets/icono-192.png">
-  <!-- fuente redondeada infantil (ver FUENTE en src/SpriteConfig.js) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * {
-      margin: 0; padding: 0; box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none; user-select: none;
-      touch-action: none;
-    }
-    html, body {
-      width: 100%; height: 100%;
-      overflow: hidden;
-      overscroll-behavior: none;     /* sin "rebote" ni tirar-para-recargar en el celular */
-      background: #2a1a0e;
-    }
-    canvas {
-      display: block;
-      touch-action: none;
-      margin: 0 auto;
-    }
-    /* El contenedor respeta el notch y la barra de inicio; Phaser (Scale.FIT) se ajusta a él */
-    #game-container {
-      position: fixed;
-      top: env(safe-area-inset-top, 0px);
-      bottom: env(safe-area-inset-bottom, 0px);
-      left: env(safe-area-inset-left, 0px);
-      right: env(safe-area-inset-right, 0px);
-      display: flex; align-items: center; justify-content: center;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Circuito Puzzle</title>
+<meta name="description" content="Un juego de plastilina para chicos de 6 a 8 años: guían una serpiente que es la corriente eléctrica y aprenden, sin leer, cómo fluye la electricidad por un circuito.">
+<meta name="theme-color" content="#2a1a0e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icono-180.png">
+<link rel="icon" type="image/png" href="assets/icono-192.png">
+<meta property="og:title" content="Circuito Puzzle">
+<meta property="og:description" content="La electricidad es un camino. Los chicos aprenden a seguirlo jugando.">
+<meta property="og:image" content="assets/manual/tablero.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Portada de Circuito — misma plastilina que el juego. Mobile first: lo de arriba es el
+     teléfono; las media queries de abajo agregan para tableta y escritorio. */
+  :root {
+    --choco:  #2a1a0e;
+    --choco2: #3a2412;
+    --crema:  #f7e7bd;
+    --crema2: #fdf3dc;
+    --borde:  #caa05a;
+    --tinta:  #5a3a1a;
+    --suave:  #8a6a3a;
+    --verde:  #7cc35a;  --verde-o:  #4a8a34;
+    --naranja:#f08a3c;  --naranja-o:#a35a1e;
+    --amarillo:#f6c945; --amarillo-o:#b8901a;
+    --azul:   #5fb0e8;  --azul-o:   #3a78a8;
+    --rojo:   #e8705e;  --rojo-o:   #a83a2e;
+    --lila:   #b48ad8;  --lila-o:   #7a52a0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: hidden; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--choco);
+    color: var(--tinta);
+    font-family: "Fredoka", "Trebuchet MS", sans-serif;
+    font-size: 17px; line-height: 1.55;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
 
-    /* Girar el dispositivo: cualquier pantalla táctil parada (teléfono o tableta).
-       Sin texto que leer: el teléfono gira solo en la animación. */
-    #rotate-msg {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: #2a1a0e;
-      color: #f7e7bd;
-      font-family: "Fredoka", "Comic Sans MS", "Trebuchet MS", sans-serif;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 26px;
-      z-index: 9999;
-      text-align: center;
-      padding: 20px;
-    }
-    #rotate-msg .tel {
-      width: 90px; height: 150px; border-radius: 18px;
-      background: #f08a3c; border: 6px solid #8a3a10; box-shadow: 0 8px 0 #5a2a0a;
-      position: relative; animation: girar 2.2s ease-in-out infinite;
-    }
-    #rotate-msg .tel::after {
-      content: ""; position: absolute; inset: 12px 10px 26px; border-radius: 6px; background: #fdf3dc;
-    }
-    #rotate-msg .flecha { font-size: 54px; color: #f6c945; line-height: 1; }
-    #rotate-msg .chico { font-size: 13px; color: #c8a070; }
-    @keyframes girar { 0%, 25% { transform: rotate(0deg); } 55%, 100% { transform: rotate(-90deg); } }
-    /* Cargador en HTML puro: se ve al instante, mientras baja Phaser (~1 MB) en redes
-       lentas de teléfono. main.js lo quita cuando arranca el juego. */
-    #cargando {
-      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-      background: #2a1a0e; z-index: 50;
-    }
-    #cargando .bolita {
-      width: 34px; height: 34px; margin: 0 8px; border-radius: 50%;
-      background: #f08a3c; border: 5px solid #a35a1e; animation: rebote .9s ease-in-out infinite;
-    }
-    #cargando .bolita:nth-child(2) { background: #f6c945; border-color: #b8901a; animation-delay: .15s; }
-    #cargando .bolita:nth-child(3) { background: #7cc35a; border-color: #4a8a34; animation-delay: .3s; }
-    @keyframes rebote { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-26px); } }
-    @media (orientation: portrait) and (pointer: coarse) {
-      #rotate-msg { display: flex; }
-    }
-  </style>
+  /* ── héroe ── */
+  .heroe {
+    position: relative; min-height: 100vh; min-height: 100svh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: max(28px, env(safe-area-inset-top)) 18px 40px; text-align: center; overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(42,26,14,.35) 0%, rgba(42,26,14,.15) 45%, rgba(42,26,14,.85) 100%),
+      url("assets/fondos/login.png") center / cover no-repeat;
+  }
+  .logo { display: flex; justify-content: center; flex-wrap: wrap; gap: 0; }
+  .logo span {
+    font-weight: 700; font-size: clamp(46px, 15vw, 120px); line-height: 1;
+    color: var(--c); -webkit-text-stroke: 3px #fff; paint-order: stroke fill;
+    text-shadow: 0 6px 0 rgba(90,58,26,.45);
+    display: inline-block; animation: salto 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * .12s);
+  }
+  @keyframes salto { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-10px); } 90% { transform: translateY(2px); } }
+  .lema {
+    margin-top: 10px; font-weight: 600; font-size: clamp(19px, 5vw, 30px); color: #fff6e0; line-height: 1.25;
+    text-shadow: 0 2px 0 rgba(42,26,14,.6), 0 0 18px rgba(42,26,14,.5);
+  }
+  .lema b { color: var(--amarillo); }
+  .personajes { display: flex; align-items: flex-end; justify-content: center; gap: 4%; margin: 18px 0 8px; width: min(420px, 90%); }
+  .personajes img { filter: drop-shadow(4px 7px 0 rgba(42,26,14,.4)); }
+  .personajes .cabeza { width: 34%; animation: mece 2.2s ease-in-out infinite; }
+  .personajes .pieza  { width: 18%; animation: flota 2.6s ease-in-out infinite; }
+  .personajes .pieza:nth-child(3) { animation-delay: .4s; }
+  .personajes .pieza:nth-child(4) { animation-delay: .8s; }
+  @keyframes mece  { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+  @keyframes flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+  /* ── botones de plastilina ── */
+  .botones { display: flex; flex-direction: column; gap: 16px; width: min(360px, 100%); margin-top: 18px; }
+  .boton {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    min-height: 72px; padding: 12px 22px; border-radius: 26px;
+    font-weight: 700; font-size: 26px; color: #fff; text-decoration: none; letter-spacing: .5px;
+    background: var(--c); border: 4px solid var(--o);
+    box-shadow: 0 7px 0 var(--o), 0 12px 18px rgba(0,0,0,.35), inset 0 6px 0 rgba(255,255,255,.28);
+    text-shadow: 0 2px 0 var(--o);
+    transition: transform .08s, box-shadow .08s;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .boton:active { transform: translateY(6px); box-shadow: 0 1px 0 var(--o), 0 4px 8px rgba(0,0,0,.3), inset 0 6px 0 rgba(255,255,255,.28); }
+  .boton:focus-visible { outline: 4px solid #fff; outline-offset: 4px; }
+  .boton svg { width: 34px; height: 34px; flex: none; }
+  .jugar  { --c: var(--verde);   --o: var(--verde-o);   font-size: 30px; min-height: 84px; }
+  .manual { --c: var(--naranja); --o: var(--naranja-o); }
+  .datos { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; }
+  .datos span {
+    background: rgba(253,243,220,.92); border: 3px solid var(--borde); border-radius: 16px;
+    padding: 4px 12px; font-weight: 600; font-size: 14px;
+  }
+  .bajar { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #fff6e0; font-size: 26px; animation: flota 1.8s ease-in-out infinite; text-decoration: none; }
+
+  /* ── secciones ── */
+  main { padding: 0 12px 30px; }
+  .seccion {
+    max-width: 960px; margin: 28px auto 0; padding: 26px 18px 24px;
+    background: var(--crema2); border: 4px solid var(--borde); border-radius: 30px;
+    box-shadow: 0 8px 0 #b48a48, 0 16px 30px rgba(0,0,0,.4);
+  }
+  .seccion h2 {
+    font-weight: 700; font-size: 28px; line-height: 1.15; color: var(--tinta); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .seccion h2 .chapa {
+    width: 46px; height: 46px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    background: var(--c); border: 3px solid var(--o); color: #fff; font-size: 24px; box-shadow: 0 4px 0 var(--o);
+  }
+  .seccion p { margin-bottom: 12px; }
+  .seccion p.grande { font-size: 20px; font-weight: 500; }
+  .resalta { background: linear-gradient(transparent 60%, rgba(246,201,69,.7) 60%); font-weight: 600; }
+  .dos { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: center; }
+
+  /* circuito animado */
+  .circuito { width: 100%; max-width: 440px; margin: 0 auto; display: block; }
+  .circuito .cable { fill: none; stroke: #8a5a2a; stroke-width: 14; stroke-linecap: round; stroke-linejoin: round; }
+  .circuito .cobre { fill: none; stroke: #c88a4a; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+  .circuito .flujo {
+    fill: none; stroke: #ffe45c; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 2 26; animation: corre 1.2s linear infinite;
+    filter: drop-shadow(0 0 4px #ffd54a);
+  }
+  @keyframes corre { to { stroke-dashoffset: -28; } }
+  .circuito .luz { fill: #ff8a3c; opacity: .55; animation: brilla 1.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes brilla { 0%, 100% { opacity: .35; transform: scale(.9); } 50% { opacity: .8; transform: scale(1.15); } }
+  .leyenda { text-align: center; font-weight: 600; color: var(--suave); font-size: 15px; margin-top: 4px; }
+
+  /* piezas */
+  .piezas { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
+  .pieza-c {
+    background: #fff; border: 3px solid var(--borde); border-radius: 22px; padding: 12px 10px 14px; text-align: center;
+    box-shadow: 0 5px 0 #d8b67c;
+  }
+  .pieza-c img { width: 76px; height: 76px; object-fit: contain; margin: 0 auto 6px; }
+  .pieza-c b { display: block; font-size: 17px; }
+  .pieza-c span { font-size: 14px; color: var(--suave); line-height: 1.3; display: block; }
+  .pieza-c.ultima { grid-column: 1 / -1; }
+
+  /* rompecabezas */
+  .beneficios { list-style: none; display: grid; grid-template-columns: 1fr; gap: 12px; margin: 10px 0 14px; }
+  .beneficios li {
+    background: #fff; border: 3px solid var(--borde); border-radius: 20px; padding: 12px 14px 12px 62px; position: relative;
+    box-shadow: 0 4px 0 #d8b67c; font-size: 16px;
+  }
+  .beneficios li::before {
+    content: attr(data-ico); position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 22px;
+    background: var(--c, var(--amarillo)); border: 3px solid var(--o, var(--amarillo-o));
+  }
+  .beneficios b { display: block; font-size: 17px; }
+  .fuentes { font-size: 13px; color: var(--suave); border-top: 2px dashed var(--borde); padding-top: 10px; margin-top: 6px; }
+  .fuentes li { margin: 4px 0 4px 18px; }
+  .fuentes i { font-style: italic; }
+
+  /* capturas */
+  .capturas { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 10px; }
+  .capturas figure {
+    background: #fff; padding: 8px 8px 10px; border-radius: 6px; box-shadow: 0 6px 14px rgba(60,40,10,.35);
+    transform: rotate(var(--r, -1deg));
+  }
+  .capturas figcaption { text-align: center; font-weight: 600; font-size: 15px; margin-top: 6px; color: var(--suave); }
+
+  .consejo { background: #fff6dc; border: 3px dashed var(--borde); border-radius: 18px; padding: 12px 14px; font-size: 15px; margin-top: 16px; }
+
+  /* ── créditos ── */
+  footer {
+    margin-top: 34px; padding: 30px 18px max(30px, env(safe-area-inset-bottom)); text-align: center; color: #f7e7bd;
+    background: var(--choco2); border-top: 5px solid #5a3a1a;
+  }
+  footer .hecho { font-weight: 600; font-size: 18px; }
+  .creditos { display: flex; flex-direction: column; gap: 12px; align-items: center; margin: 16px 0; }
+  .credito {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none; min-height: 48px;
+    background: rgba(253,243,220,.08); border: 2px solid rgba(202,160,90,.55); border-radius: 18px; padding: 8px 16px;
+  }
+  .credito:active, .credito:hover { background: rgba(253,243,220,.18); }
+  .credito b { color: var(--amarillo); }
+  .credito small { display: block; font-size: 13px; color: #c8a070; }
+  footer .chico { font-size: 13px; color: #a8875a; margin-top: 10px; }
+
+  /* ── tableta ── */
+  @media (min-width: 640px) {
+    main { padding: 0 20px 40px; }
+    .seccion { padding: 34px 34px 30px; margin-top: 36px; }
+    .seccion h2 { font-size: 34px; }
+    .botones { flex-direction: row; width: auto; }
+    .boton { min-width: 220px; }
+    .piezas { grid-template-columns: repeat(5, 1fr); }
+    .pieza-c.ultima { grid-column: auto; }
+    .beneficios { grid-template-columns: 1fr 1fr; }
+    .capturas { grid-template-columns: repeat(3, 1fr); }
+    .creditos { flex-direction: row; justify-content: center; flex-wrap: wrap; }
+  }
+  /* ── escritorio ── */
+  @media (min-width: 900px) {
+    .dos { grid-template-columns: 1.1fr 1fr; gap: 34px; }
+    .seccion { margin-top: 44px; }
+  }
+  /* teléfono acostado: el héroe no necesita ocupar toda la pantalla */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .heroe { min-height: auto; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: 24px; }
+    .logo span { font-size: clamp(40px, 19vh, 90px); -webkit-text-stroke-width: 2px; }
+    .lema { font-size: 18px; margin-top: 4px; }
+    .personajes { width: min(240px, 40%); margin: 6px 0 0; }
+    .botones { margin-top: 10px; }
+    .boton { min-height: 60px; font-size: 22px; }
+    .jugar { min-height: 64px; font-size: 24px; }
+    .datos { margin-top: 12px; }
+    .botones { flex-direction: row; width: auto; }
+    .bajar { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
 </head>
 <body>
-  <div id="rotate-msg">
-    <div class="tel"></div>
-    <div class="flecha">↺</div>
-    <div class="chico">el juego funciona en horizontal</div>
+
+<header class="heroe">
+  <h1 class="logo" aria-label="Circuito">
+    <span style="--c:#e8705e;--i:0">C</span><span style="--c:#f08a3c;--i:1">I</span><span style="--c:#f6c945;--i:2">R</span><span style="--c:#7cc35a;--i:3">C</span><span style="--c:#5fb0e8;--i:4">U</span><span style="--c:#b48ad8;--i:5">I</span><span style="--c:#e8705e;--i:6">T</span><span style="--c:#f08a3c;--i:7">O</span>
+  </h1>
+  <p class="lema">La electricidad es un <b>camino</b>.<br>Aprende a seguirlo jugando.</p>
+
+  <div class="personajes" aria-hidden="true">
+    <img class="cabeza" src="assets/snake_head.png" alt="">
+    <img class="pieza" src="assets/comp_bat.png" alt="">
+    <img class="pieza" src="assets/comp_r.png" alt="">
+    <img class="pieza" src="assets/comp_led.png" alt="">
   </div>
-  <div id="cargando"><div class="bolita"></div><div class="bolita"></div><div class="bolita"></div></div>
-  <div id="game-container"></div>
-  <!-- define window.__DEV__ — debe correr antes que los módulos del juego -->
-  <script src="src/dev-guard.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-  <script type="module" src="src/main.js"></script>
+
+  <nav class="botones" aria-label="Entrar">
+    <a class="boton jugar" href="jugar.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+      Jugar
+    </a>
+    <a class="boton manual" href="manual.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5c3-1.3 6-1.3 9 .8 3-2.1 6-2.1 9-.8v13c-3-1.3-6-1.3-9 .8-3-2.1-6-2.1-9-.8z" fill="#fff"/><path d="M12 6.3v13" stroke="#a35a1e" stroke-width="2"/></svg>
+      Manual
+    </a>
+  </nav>
+
+  <div class="datos">
+    <span>6 a 8 años</span><span>se juega sin saber leer</span><span>teléfono · tableta · compu</span>
+  </div>
+  <a class="bajar" href="#flujo" aria-label="Ver más">▾</a>
+</header>
+
+<main>
+
+  <!-- ── la electricidad es un flujo ── -->
+  <section class="seccion" id="flujo">
+    <div class="dos">
+      <div>
+        <h2><span class="chapa" style="--c:var(--amarillo);--o:var(--amarillo-o)">⚡</span>La electricidad es un flujo</h2>
+        <p class="grande">En Circuito, la corriente eléctrica es una <b>serpiente de plastilina</b> que sale de la batería y recorre un camino.</p>
+        <p>Así es de verdad: la electricidad no "aparece" en la lámpara. <span class="resalta">Fluye</span>, como el agua por una manguera, y necesita un camino completo que salga de la batería y vuelva a ella. Si el camino se corta, la luz se apaga.</p>
+        <p>Un chico que a los 6 años ya <b>vio</b> ese recorrido —y lo armó con sus manos— llega a la escuela con la idea más importante de la electricidad ya en la cabeza, sin haber memorizado una sola palabra.</p>
+      </div>
+      <div>
+        <svg class="circuito" viewBox="0 0 400 300" role="img" aria-label="Un circuito: la corriente sale de la batería, pasa por la resistencia y prende el LED, y vuelve a la batería">
+          <path class="cable" d="M70 230 V70 Q70 50 90 50 H310 Q330 50 330 70 V230 Q330 250 310 250 H90 Q70 250 70 230 Z"/>
+          <path class="cobre" d="M70 230 V70 Q70 50 90 50 H310 Q330 50 330 70 V230 Q330 250 310 250 H90 Q70 250 70 230 Z"/>
+          <path class="flujo" d="M70 230 V70 Q70 50 90 50 H310 Q330 50 330 70 V230 Q330 250 310 250 H90 Q70 250 70 230 Z"/>
+          <circle class="luz" cx="330" cy="150" r="54"/>
+          <image href="assets/comp_bat.png" x="22" y="102" width="96" height="96"/>
+          <image href="assets/comp_r.png"   x="150" y="2"  width="100" height="96"/>
+          <image href="assets/comp_led.png" x="284" y="104" width="92" height="92"/>
+          <image href="assets/snake_head.png" x="160" y="214" width="78" height="72" transform="rotate(180 199 250)"/>
+        </svg>
+        <p class="leyenda">la batería empuja · la resistencia frena · el LED se prende</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── reconocer las piezas ── -->
+  <section class="seccion">
+    <h2><span class="chapa" style="--c:var(--azul);--o:var(--azul-o)">🔍</span>Conocer las piezas desde chico</h2>
+    <p class="grande">Las cinco piezas del juego son <b>componentes reales</b>: están adentro de linternas, juguetes, controles remotos y computadoras.</p>
+    <p>Acá las reconocen por su forma y su color, y aprenden qué hace cada una por cómo cambia el juego. Cuando años después las vean en un aula de robótica o en una clase de ciencias, no van a ser palabras nuevas: van a ser <span class="resalta">viejas conocidas</span>. Lo que ya es familiar cuesta mucho menos aprender.</p>
+    <div class="piezas">
+      <div class="pieza-c"><img src="assets/comp_bat.png" alt=""><b>Batería</b><span>da la energía</span></div>
+      <div class="pieza-c"><img src="assets/comp_r.png" alt=""><b>Resistencia</b><span>frena la corriente</span></div>
+      <div class="pieza-c"><img src="assets/comp_sw.png" alt=""><b>Interruptor</b><span>abre y cierra el paso</span></div>
+      <div class="pieza-c"><img src="assets/comp_c.png" alt=""><b>Capacitor</b><span>guarda un poquito de energía</span></div>
+      <div class="pieza-c ultima"><img src="assets/comp_led.png" alt=""><b>LED</b><span>se prende si todo está bien</span></div>
+    </div>
+  </section>
+
+  <!-- ── los rompecabezas ── -->
+  <section class="seccion">
+    <h2><span class="chapa" style="--c:var(--lila);--o:var(--lila-o)">🧩</span>Los rompecabezas ejercitan la cabeza</h2>
+    <p class="grande">Cada nivel es un rompecabezas: hay que <b>planear</b> por dónde va la serpiente antes de moverla, porque su cuerpo ocupa lugar y no puede volver atrás.</p>
+    <ul class="beneficios">
+      <li data-ico="🗺️" style="--c:var(--azul);--o:var(--azul-o)"><b>Pensar en el espacio</b>Imaginar recorridos, girar, prever dónde va a quedar cada parte del cuerpo.</li>
+      <li data-ico="🧠" style="--c:var(--lila);--o:var(--lila-o)"><b>Planear antes de actuar</b>Las estrellas premian el camino más corto: pensar primero rinde más que probar a ciegas.</li>
+      <li data-ico="🔁" style="--c:var(--verde);--o:var(--verde-o)"><b>Equivocarse sin miedo</b>Reiniciar es gratis. Probar, fallar y corregir es parte del juego.</li>
+      <li data-ico="⭐" style="--c:var(--amarillo);--o:var(--amarillo-o)"><b>Constancia</b>Un poquito cada día (hasta 10 niveles nuevos) y cada tablero un poco más difícil.</li>
+    </ul>
+    <p>La investigación en desarrollo infantil encontró que los chicos que juegan con rompecabezas en la primera infancia muestran <b>mejores habilidades espaciales</b>, y que esas habilidades se relacionan con el desempeño posterior en <b>matemática y ciencias</b>. Circuito no promete hacer a nadie más inteligente; sí da un rato de juego que pone a trabajar justamente esas habilidades.</p>
+    <ol class="fuentes">
+      <li>Levine, Ratliff, Huttenlocher y Cannon (2012). <i>Early puzzle play: A predictor of preschoolers' spatial transformation skill.</i> Developmental Psychology.</li>
+      <li>Verdine y colegas (2014). <i>Deconstructing building blocks: Preschoolers' spatial assembly performance relates to early mathematical skills.</i> Child Development.</li>
+      <li>Wai, Lubinski y Benbow (2009). <i>Spatial ability for STEM domains.</i> Journal of Educational Psychology.</li>
+    </ol>
+  </section>
+
+  <!-- ── cómo se ve ── -->
+  <section class="seccion">
+    <h2><span class="chapa" style="--c:var(--verde);--o:var(--verde-o)">▶</span>Así se juega</h2>
+    <p>Sin instrucciones escritas: la primera vez, el juego <b>se resuelve solo</b> para mostrar cómo se hace, y después una manito acompaña los primeros niveles.</p>
+    <div class="capturas">
+      <figure style="--r:-1.2deg"><img src="assets/manual/tablero.jpg" alt="La serpiente encendida sobre el tablero, pasando por la batería" loading="lazy"><figcaption>guías la serpiente</figcaption></figure>
+      <figure style="--r:.8deg"><img src="assets/manual/victoria.jpg" alt="Pantalla de victoria con tres estrellas y monedas" loading="lazy"><figcaption>prendes la luz</figcaption></figure>
+      <figure style="--r:-.6deg"><img src="assets/manual/cuarto.jpg" alt="El cuarto de plastilina con el banco de trabajo" loading="lazy"><figcaption>decoras tu cuarto</figcaption></figure>
+    </div>
+    <div class="botones" style="margin: 26px auto 0; justify-content: center;">
+      <a class="boton jugar" href="jugar.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>Jugar</a>
+      <a class="boton manual" href="manual.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5c3-1.3 6-1.3 9 .8 3-2.1 6-2.1 9-.8v13c-3-1.3-6-1.3-9 .8-3-2.1-6-2.1-9-.8z" fill="#fff"/><path d="M12 6.3v13" stroke="#a35a1e" stroke-width="2"/></svg>Manual</a>
+    </div>
+    <p class="consejo"><b>En el celular o la tableta:</b> el juego va acostado. Desde el menú del navegador, "Agregar a pantalla de inicio" lo deja como una app, en pantalla completa.</p>
+  </section>
+
+</main>
+
+<footer>
+  <p class="hecho">Hecho con plastilina y cariño en Guatemala</p>
+  <div class="creditos">
+    <a class="credito" href="https://creabot.us" target="_blank" rel="noopener"><span><b>Creabot</b><small>un proyecto de</small></span></a>
+    <a class="credito" href="https://www.instagram.com/yeffrimic/" target="_blank" rel="noopener"><span><b>Yeffri Salazar</b><small>@yeffrimic</small></span></a>
+    <a class="credito" href="https://www.instagram.com/purishiry/" target="_blank" rel="noopener"><span><b>Priscila Ramírez</b><small>@purishiry</small></span></a>
+  </div>
+  <p class="chico">Circuito Puzzle · v0.8</p>
+</footer>
+
 </body>
 </html>

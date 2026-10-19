@@ -6,7 +6,7 @@
 // editor donde [R] le borra la decoración, ni se saltee la progresión.
 //
 // Script CLÁSICO a propósito (no módulo): tiene que correr sincrónico y antes que todo,
-// y lo usan tanto index.html (ES modules) como editor/tester/style-preview (scripts clásicos).
+// y lo usan tanto jugar.html (ES modules) como editor/tester/style-preview (scripts clásicos).
 // Es la ÚNICA copia de esta regla en el proyecto — src/Dev.js sólo lee el resultado.
 (function () {
   var HOSTS_DEV = ['localhost', '127.0.0.1', '::1'];

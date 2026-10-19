@@ -27,7 +27,7 @@ Cuando haya que elegir entre una solución elegante y una que se entienda sin te
 
 No romper ninguna de estas:
 
-- **Phaser 3.60 es una global.** Se carga por `<script>` desde CDN en `index.html`. **Nunca**
+- **Phaser 3.60 es una global.** Se carga por `<script>` desde CDN en `jugar.html` (el juego; `index.html` es la portada). **Nunca**
   `import Phaser`.
 - **Sin bundler, sin npm, sin `package.json`, sin paso de compilación.** Cada archivo se sirve tal
   cual al navegador. Módulos ES6 nativos.
@@ -46,6 +46,9 @@ No romper ninguna de estas:
 
 | Archivo | De qué es dueño |
 |---|---|
+| `index.html` | **portada** (landing): botones a Jugar y Manual, por qué electricidad + rompecabezas, créditos |
+| `jugar.html` | el juego (carga Phaser y `src/main.js`); los atajos de dev (`?nivel=N`…) van acá |
+| `manual.html` | libro de instrucciones ilustrado, con giro de página |
 | `src/main.js` | config de Phaser, `window.isMobile`, espera a que cargue la fuente |
 | `src/levels.js` | los 50 niveles, el helper `G()`, `packRequerido()` y `TIERS` (currículo) |
 | `src/tienda.js` | catálogo y precios; el comentario de cabecera explica cómo se calcularon |
@@ -161,6 +164,14 @@ girar en cualquier táctil vertical, y un cargador HTML que se ve antes de que b
 **Probar en teléfono emulado** (Edge/Chrome DevTools, 844×390 y 667×375, con touch) antes de dar
 algo por terminado. Limitación conocida: Phaser 3.60 no tiene `resolution`, así que en pantallas 3x
 el lienzo se ve algo suave.
+
+### Las afirmaciones de la portada tienen que poder sostenerse
+
+La portada habla de rompecabezas y desarrollo. Se escribió con lo que la investigación respalda
+(rompecabezas en la primera infancia → habilidades espaciales → desempeño en matemática y ciencias;
+fuentes citadas al pie de la sección) y dice explícitamente que el juego **no** promete más
+inteligencia. Si se agrega material de difusión, mantener ese criterio: el público son padres y
+maestros.
 
 ### Toda salida de escena pasa por `irA()`
 

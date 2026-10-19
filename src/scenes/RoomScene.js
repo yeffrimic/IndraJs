@@ -4,7 +4,7 @@ import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido       from '../Sonido.js';
 import {
   CLAY, losa, boton, estrella, estiloTexto, botonSonido,
-  irA, entrarEscena, aparecer, cartel, confeti, toque, centrarEscenario, ESCENARIO,
+  irA, entrarEscena, aparecer, cartel, confeti, toque, centrarEscenario, ESCENARIO, abrirManual,
 } from '../ClayUI.js';
 import { PASO, mano, piedritas } from '../Tutorial.js';
 import { LEVELS, packRequerido } from '../levels.js';
@@ -442,6 +442,9 @@ export default class RoomScene extends Phaser.Scene {
     boton(this, 30, height - 30, { w: 40, fill: CLAY.offFill, colorIcono: 0x8a7a58, icono: 'puerta', onTap: () => {
       GameState.username = null; irA(this, 'LoginScene');
     }}).setDepth(150).setAlpha(0.8);
+    // el manual, al lado de la puerta (también es cosa del adulto)
+    boton(this, 80, height - 30, { w: 40, fill: CLAY.offFill, colorIcono: 0x8a7a58, icono: 'libro', onTap: abrirManual })
+      .setDepth(150).setAlpha(0.8);
   }
 
   // ── burbujas de interacción (workbench / tienda) ──

@@ -9,7 +9,7 @@
 // Esta lista es, de hecho, el checklist de arte pendiente.
 
 // ── tipografía ──
-// Fuente redondeada infantil (se carga en index.html). El stack termina en fuentes
+// Fuente redondeada infantil (se carga en jugar.html). El stack termina en fuentes
 // de sistema para que degrade solo si no hay red.
 export const FUENTE = '"Fredoka", "Baloo 2", "Comic Sans MS", "Trebuchet MS", sans-serif';
 

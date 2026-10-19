@@ -118,9 +118,11 @@ cd IndraJs
 npx serve .          # o: python -m http.server
 ```
 
-Abrir `http://localhost:3000` (o el puerto que informe el servidor).
+Abrir `http://localhost:3000` (o el puerto que informe el servidor): ahí está la portada, con
+enlaces al juego (`jugar.html`) y al manual (`manual.html`). Los atajos de desarrollo (`?nivel=N`,
+`?sel`, `?nuevo`…) van sobre `jugar.html`.
 
-> **No abrir `index.html` con doble clic.** El navegador bloquea los módulos ES6 desde `file://` y
+> **No abrir los `.html` con doble clic.** El navegador bloquea los módulos ES6 desde `file://` y
 > el juego no arranca.
 
 ---
@@ -128,7 +130,8 @@ Abrir `http://localhost:3000` (o el puerto que informe el servidor).
 ## Arquitectura
 
 ```
-index.html               carga Phaser desde CDN y src/main.js
+index.html               portada: enlaces al juego y al manual
+jugar.html               el juego: carga Phaser desde CDN y src/main.js
 manual.html              libro de instrucciones ilustrado (estilo manual de los 90)
 editor.html              editor de niveles          ⚠ ver "Estado de las herramientas"
 tester.html              probador de niveles        ⚠ ídem
@@ -428,9 +431,12 @@ consultan vía `src/Dev.js`.
 
 ---
 
-## Autor
+## Créditos
 
-**Yeffri Salazar** — [Creabot](https://creabot.us), Guatemala.
+Un proyecto de [Creabot](https://creabot.us), Guatemala.
+
+- **Yeffri Salazar** — [@yeffrimic](https://www.instagram.com/yeffrimic/)
+- **Priscila Ramírez** — [@purishiry](https://www.instagram.com/purishiry/)
 
 ## Licencia
 
