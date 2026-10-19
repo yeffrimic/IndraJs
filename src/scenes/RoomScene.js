@@ -4,7 +4,7 @@ import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido       from '../Sonido.js';
 import {
   CLAY, losa, boton, estrella, estiloTexto, botonSonido,
-  irA, entrarEscena, aparecer, cartel, confeti,
+  irA, entrarEscena, aparecer, cartel, confeti, toque, centrarEscenario, ESCENARIO,
 } from '../ClayUI.js';
 import { PASO, mano, piedritas } from '../Tutorial.js';
 import { LEVELS, packRequerido } from '../levels.js';
@@ -13,7 +13,7 @@ export default class RoomScene extends Phaser.Scene {
   constructor() { super('RoomScene'); }
 
   create() {
-    const { width, height } = this.scale;
+    const width = ESCENARIO.w, height = ESCENARIO.h;
     const S = SpriteConfig;
     entrarEscena(this);
 
@@ -29,6 +29,8 @@ export default class RoomScene extends Phaser.Scene {
     } else {
       this._dibujarCuartoPlaceholder(width, height);
     }
+    // pantalla más ancha que 4:3 → el cuarto queda centrado y los costados son "banda"
+    this.banda = centrarEscenario(this, bgKey);
 
     // ── workbench ──
     const WB_X = this.layout.workbench.x, WB_Y = this.layout.workbench.y;
@@ -70,6 +72,17 @@ export default class RoomScene extends Phaser.Scene {
     // botones táctiles solo en móvil real
     const isMobile = window.isMobile || false;
     if (isMobile) this._crearControlesMobile(width, height);
+
+    // Tocar (o hacer clic en) el piso: el personaje camina hasta ahí. Si el toque cae
+    // sobre un botón o una burbuja, lo maneja ese objeto y acá no se hace nada.
+    this._destino = null;
+    this.marcaDestino = null;
+    this.input.on('pointerdown', (p, sobre) => {
+      if (this.editMode || (sobre && sobre.length)) return;
+      const y = Math.max(p.worldY, this.layout.pisoY + 4);
+      this._destino = { x: Phaser.Math.Clamp(p.worldX, 0, ESCENARIO.w), y: y - this.PIES_OFF };
+      this._marcarDestino(this._destino.x, y);
+    });
 
     // ── HUD ──
     this._crearHUD(width, height);
@@ -133,7 +146,7 @@ export default class RoomScene extends Phaser.Scene {
 
   // ── modo edición: arrastrar objetos ──
   _iniciarEditor() {
-    const { width, height } = this.scale;
+    const width = ESCENARIO.w, height = ESCENARIO.h;
     this.add.rectangle(0, 0, width, 26, 0x000000, 0.65).setOrigin(0).setDepth(300);
     this.add.text(8, 13, '✏️ EDITOR — arrastrá objetos y la línea del piso · [E] exportar (F12) · [R] reset', {
       fontSize: '11px', color: '#ffffff', fontFamily: FUENTE
@@ -184,7 +197,7 @@ export default class RoomScene extends Phaser.Scene {
   }
 
   _toastEditor(msg) {
-    const t = this.add.text(this.scale.width / 2, this.scale.height - 16, msg, {
+    const t = this.add.text(ESCENARIO.w / 2, ESCENARIO.h - 16, msg, {
       fontSize: '12px', color: '#fff', fontFamily: FUENTE,
       backgroundColor: '#000000aa', padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setDepth(301);
@@ -261,7 +274,7 @@ export default class RoomScene extends Phaser.Scene {
   // queremos pies >= pisoY, así que el borde superior del mundo va PIES_OFF + medio
   // cuerpo más arriba de esa línea.
   _limitarAlPiso() {
-    const { width, height } = this.scale;
+    const width = ESCENARIO.w, height = ESCENARIO.h;
     const tope = this.layout.pisoY - this.PIES_OFF - this.CUERPO_H / 2;
     this.physics.world.setBounds(0, tope, width, height - tope);
   }
@@ -420,8 +433,10 @@ export default class RoomScene extends Phaser.Scene {
     // energía: niveles que le quedan HOY (incluye la energía comprada)
     frasco(338, 108, img('energia'), GameState.nivelesRestantesHoy(), '#7cc35a', '#2f5a1e');
 
-    this.btnMapa = boton(this, width - 100, y, { w: 54, fill: CLAY.lila, icono: 'mapa', onTap: () => irA(this, 'LevelSelectScene') }).setDepth(150);
-    botonSonido(this, width - 40, y, 46, 150);
+    const tS = toque(46), tM = toque(54);
+    const xS = width - 10 - tS / 2, xM = xS - tS / 2 - 12 - tM / 2;
+    this.btnMapa = boton(this, xM, y + (tM - 54) / 2, { w: tM, fill: CLAY.lila, icono: 'mapa', onTap: () => irA(this, 'LevelSelectScene') }).setDepth(150);
+    botonSonido(this, xS, y + (tS - 46) / 2, tS, 150);
 
     // cerrar sesión: puertita chica abajo a la izquierda (es para el adulto)
     boton(this, 30, height - 30, { w: 40, fill: CLAY.offFill, colorIcono: 0x8a7a58, icono: 'puerta', onTap: () => {
@@ -454,8 +469,8 @@ export default class RoomScene extends Phaser.Scene {
 
   // panel de aviso reutilizable: icono grande + botones
   _panelAviso(dibujarIcono, botones) {
-    const { width, height } = this.scale;
-    const velo = this.add.rectangle(0, 0, width, height, 0x1a0e06, 0.5).setOrigin(0).setDepth(400).setInteractive();
+    const width = ESCENARIO.w, height = ESCENARIO.h;
+    const velo = this.add.rectangle(-this.banda, 0, width + this.banda * 2, height, 0x1a0e06, 0.5).setOrigin(0).setDepth(400).setInteractive();
     const panel = this.add.container(width / 2, height / 2).setDepth(401);
     panel.add(losa(this, 0, 0, 340, 260, { fill: CLAY.cremaClaro, borde: CLAY.borde, r: 32, canto: 10, grosor: 5 }));
     dibujarIcono(panel);
@@ -466,6 +481,16 @@ export default class RoomScene extends Phaser.Scene {
         onTap: () => { cerrar(); if (bt.onTap) bt.onTap(); } }));
     });
     aparecer(this, panel);
+  }
+
+  // anillito en el piso donde tocó: "voy para allá"
+  _marcarDestino(x, y) {
+    if (!this.marcaDestino) {
+      this.marcaDestino = this.add.ellipse(x, y, 34, 14).setStrokeStyle(3, 0xfff3d6, 0.9).setDepth(3);
+    }
+    const m = this.marcaDestino.setPosition(x, y).setVisible(true).setScale(1.6).setAlpha(1);
+    this.tweens.killTweensOf(m);
+    this.tweens.add({ targets: m, scale: 1, duration: 260, ease: 'Back.easeOut' });
   }
 
   // ya no quedan niveles hoy: luna dormida + energía apagada
@@ -610,8 +635,18 @@ export default class RoomScene extends Phaser.Scene {
 
     // velocidad — teclado o touch
     const td = this._touchDir;
-    const vx = left.isDown ? -speed : right.isDown ? speed : td ? td.vx * speed : 0;
-    const vy  = up.isDown   ? -speed : down.isDown   ? speed : td ? td.vy * speed : 0;
+    let vx = left.isDown ? -speed : right.isDown ? speed : td ? td.vx * speed : 0;
+    let vy  = up.isDown   ? -speed : down.isDown   ? speed : td ? td.vy * speed : 0;
+
+    // caminar hacia donde tocó (las flechas mandan sobre el toque)
+    if (vx || vy) this._destino = null;
+    else if (this._destino) {
+      const dx = this._destino.x - this.player.x, dy = this._destino.y - this.player.y;
+      const d = Math.hypot(dx, dy);
+      const bloqueado = d > 8 && this.player.body && this.player.body.blocked.up && dy < 0 && Math.abs(dx) < 8;
+      if (d < 8 || bloqueado) { this._destino = null; if (this.marcaDestino) this.marcaDestino.setVisible(false); }
+      else { vx = dx / d * speed; vy = dy / d * speed; }
+    }
 
     this.player.setVelocity(vx, vy);
     if ((vx || vy) && this._demoActiva) this._pararDemo();
@@ -678,8 +713,11 @@ export default class RoomScene extends Phaser.Scene {
   // Flechas de plastilina (mantener = caminar). No hay botón [ E ]: en móvil se
   // toca directamente la burbuja que aparece sobre el workbench o la tienda.
   _crearControlesMobile(width, height) {
-    const S = 74, sep = 66;
-    const bx = 100, by = height - 100;
+    // con banda ancha el pad va afuera del cuarto (no tapa muebles) y más grande
+    const enBanda = this.banda >= 150;
+    const S = enBanda ? Math.min(92, (this.banda - 16) / 2.8) : 74;
+    const sep = S * 0.9;
+    const bx = enBanda ? -this.banda / 2 : 100, by = height - (enBanda ? sep + S / 2 + 24 : 100);
 
     const dirs = [
       { label: '▲', key: 'btn_up',    vx:  0, vy: -1, x: bx,       y: by - sep },

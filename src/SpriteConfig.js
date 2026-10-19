@@ -163,11 +163,14 @@ const SpriteConfig = {
     return fallbackFn ? fallbackFn() : null;
   },
 
-  // Fondo de pantalla completa: imagen estirada a (width,height) o un rectángulo de color.
+  // Fondo de pantalla completa en modo "cover": cubre (width,height) sin deformarse,
+  // recortando lo que sobre. (El ancho lógico varía con la pantalla — ver main.js —, así
+  // que estirarlo deformaría el dibujo.) Si no hay imagen, un rectángulo de color.
   fondo(scene, nombre, width, height, colorFallback) {
     const key = this.get('fondos', nombre);
     if (key && scene.textures.exists(key)) {
-      return scene.add.image(0, 0, key).setOrigin(0).setDisplaySize(width, height);
+      const img = scene.add.image(width / 2, height / 2, key);
+      return img.setScale(Math.max(width / img.width, height / img.height));
     }
     return scene.add.rectangle(0, 0, width, height, colorFallback).setOrigin(0);
   },

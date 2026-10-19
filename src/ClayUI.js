@@ -49,6 +49,42 @@ export const CLAY = {
   txtOff:   '#8a7a58',
 };
 
+// ── tamaño de toque ──
+// En pantallas táctiles todo lo que se toca va un 30 % más grande: un teléfono apaisado
+// muestra el juego al ~65 %, y un botón de 54 quedaba en 35 px (el mínimo cómodo es ~44).
+export function toque(base) {
+  return window.isMobile ? Math.round(base * 1.3) : base;
+}
+
+// ── escenario fijo de 800x600 ──
+// El cuarto y la tienda están calibrados sobre su dibujo de 800x600 (muebles, piso,
+// estantes). Con el ancho lógico variable (main.js) se centran moviendo la cámara, y
+// las bandas de los costados se rellenan con el mismo dibujo, agrandado y oscurecido.
+// Todo lo de la escena sigue usando coordenadas 0..800; lo que vaya en las bandas usa
+// x negativas (izquierda) o > 800 (derecha). Devuelve el ancho de cada banda.
+export const ESCENARIO = { w: 800, h: 600 };
+export function centrarEscenario(scene, keyFondo) {
+  const W = scene.scale.width;
+  const banda = Math.max(0, Math.round((W - ESCENARIO.w) / 2));
+  scene.cameras.main.setScroll(-banda, 0);
+  if (banda > 0) {
+    if (keyFondo && scene.textures.exists(keyFondo)) {
+      const img = scene.add.image(ESCENARIO.w / 2, ESCENARIO.h / 2, keyFondo).setDepth(-20);
+      img.setScale(Math.max(W / img.width, ESCENARIO.h / img.height) * 1.04);
+      // difuminado: que se lea como "ambiente", no como muebles o estantes repetidos
+      if (img.preFX) img.preFX.addBlur(1, 2, 2, 2.5);
+    }
+    scene.add.rectangle(-banda, 0, W, ESCENARIO.h, 0x2a1a0e, 0.55).setOrigin(0).setDepth(-19);
+    // sombrita en los bordes del escenario, para que se lea como "la escena" y no como un corte
+    const g = scene.add.graphics().setDepth(-18);
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle(0x1a0e06, 0.06);
+      g.fillRect(-6 - i * 3, 0, 6, ESCENARIO.h); g.fillRect(ESCENARIO.w + i * 3, 0, 6, ESCENARIO.h);
+    }
+  }
+  return banda;
+}
+
 // ── color ──
 export function oscurecer(color, f = 0.68) {
   const r = (color >> 16) & 0xff, g = (color >> 8) & 0xff, b = color & 0xff;

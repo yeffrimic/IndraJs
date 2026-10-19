@@ -32,7 +32,11 @@ No romper ninguna de estas:
 - **Sin bundler, sin npm, sin `package.json`, sin paso de compilación.** Cada archivo se sirve tal
   cual al navegador. Módulos ES6 nativos.
 - **Sólo `localStorage`**, sin backend. Toda escritura pasa por `GameState`.
-- **Resolución lógica fija 800×600**, `Scale.FIT` + `CENTER_BOTH`. Se adapta con `window.isMobile`.
+- **Alto lógico fijo de 600; el ancho acompaña la pantalla** (de 4:3 a 2,2:1, calculado en `main.js`),
+  `Scale.FIT` + `CENTER_BOTH`. Mobile first: se juega sobre todo en teléfonos y tabletas apaisados.
+  El cuarto y la tienda están calibrados sobre su dibujo de 800×600 y se centran con
+  `centrarEscenario()` (ClayUI); el puzzle tiene un layout "ancho" de tres columnas. Nunca asumir
+  `width === 800`. Todo lo tocable pasa por `toque()` (30 % más grande en táctil).
 - **Probar siempre con servidor local.** `file://` bloquea los módulos.
 - Nombres y comentarios **en español**, métodos privados con prefijo `_`.
 
@@ -143,6 +147,20 @@ tienda y mapa ocultos; nivel 1: demostración automática; tienda: sólo 3 regal
 ya tenían niveles hechos cargan como `listo`** (retro-compatibilidad), y los atajos de dev también lo
 fuerzan; para probarlo desde cero está `?nuevo` (perfil "Prueba" vacío). El regalo no cobra monedas:
 `GameState.regalarMueble` sólo funciona en el paso `tienda`, así la economía calibrada no cambia.
+
+### Mobile first: el teléfono apaisado es el caso principal
+
+Un teléfono muestra el juego al ~65 % (el alto manda: 390 px reales para 600 lógicos). Por eso:
+el ancho lógico crece con la pantalla en vez de dejar bandas negras; el puzzle en modo ancho libera
+el alto para el tablero (fichas de hasta 100); `toque()` agranda lo tocable; los textos para adultos
+de menos de ~13 px se ocultan en táctil. Además: arrastrar el dedo por el tablero mueve la serpiente
+(`_activarArrastre`), tocar el piso del cuarto hace caminar al personaje, el primer toque pide
+pantalla completa y traba en horizontal (no existe en iPhone Safari: ahí es "Agregar a inicio", con
+`manifest.webmanifest`), `viewport-fit=cover` + `env(safe-area-inset-*)` para el notch, aviso de
+girar en cualquier táctil vertical, y un cargador HTML que se ve antes de que baje Phaser.
+**Probar en teléfono emulado** (Edge/Chrome DevTools, 844×390 y 667×375, con touch) antes de dar
+algo por terminado. Limitación conocida: Phaser 3.60 no tiene `resolution`, así que en pantallas 3x
+el lienzo se ve algo suave.
 
 ### Toda salida de escena pasa por `irA()`
 

@@ -3,7 +3,7 @@ import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido       from '../Sonido.js';
 import {
   CLAY, losa, boton, estrella, estiloTexto, hex, oscurecer, aclarar,
-  entrarEscena, irA, respirar, sacudir, cartel,
+  entrarEscena, irA, respirar, sacudir, cartel, toque,
 } from '../ClayUI.js';
 import { LEVELS, TIERS, packRequerido } from '../levels.js';
 
@@ -34,7 +34,7 @@ export default class LevelSelectScene extends Phaser.Scene {
     // fondo: el mapa de plastilina
     SpriteConfig.fondo(this, 'select', width, height, 0xc8763f);   // fallback terracota
 
-    this.HUD_H = 76;
+    this.HUD_H = Math.max(76, toque(58) + 18);
 
     // ── contenido scrolleable ──
     this.contenedor = this.add.container(0, 0);
@@ -50,10 +50,10 @@ export default class LevelSelectScene extends Phaser.Scene {
       if (this.desde !== null) irA(this, 'PuzzleScene', { nivelIdx: this.desde });
       else irA(this, 'RoomScene');
     };
-    boton(this, 42, 36, { w: 58, fill: CLAY.azul, icono: this.desde !== null ? 'atras' : 'casita', onTap: volver }).setDepth(41);
+    boton(this, 12 + toque(58) / 2, (this.HUD_H - 4) / 2, { w: toque(58), fill: CLAY.azul, icono: this.desde !== null ? 'atras' : 'casita', onTap: volver }).setDepth(41);
 
     // total de estrellas: lo único "numérico" del mapa, y va con su icono
-    const tot = this.add.container(width / 2, 34).setDepth(41);
+    const tot = this.add.container(width / 2, (this.HUD_H - 4) / 2).setDepth(41);
     tot.add(losa(this, 0, 0, 150, 52, { fill: CLAY.cremaClaro, r: 22, canto: 5, grosor: 3 }));
     tot.add(estrella(this, -44, -3, true, 38));
     tot.add(this.add.text(-18, -3, `${GameState.totalEstrellas()}`, estiloTexto(24, '#ffffff', '#8a5a10', 5)).setOrigin(0, 0.5));
@@ -67,10 +67,10 @@ export default class LevelSelectScene extends Phaser.Scene {
   _construirContenido() {
     const M = 22;                 // margen exterior (lo que deja ver el mapa)
     const P = 18;                 // padding interno del panel
-    this.NODO   = 74;             // diámetro de cada piedra
-    this.FILA_H = 128;            // alto de cada fila (piedra + estrellas + aire)
+    this.NODO   = toque(74);      // diámetro de cada piedra (más grande en táctil)
+    this.FILA_H = this.NODO + 54; // alto de cada fila (piedra + estrellas + aire)
     const anchoUtil = this.W - M * 2 - P * 2;
-    this.porFila = Math.max(3, Math.floor(anchoUtil / 118));
+    this.porFila = Math.max(3, Math.min(10, Math.floor(anchoUtil / (this.NODO + 44))));
     this.pasoX   = anchoUtil / this.porFila;
 
     let y = this.HUD_H + 18;

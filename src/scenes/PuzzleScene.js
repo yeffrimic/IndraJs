@@ -5,7 +5,7 @@ import { LEVELS, packRequerido } from '../levels.js';
 import { PASO, NIVELES_TUTORIAL, mano } from '../Tutorial.js';
 import {
   CLAY, losa, boton, insignia, botonSonido, estrella, estiloTexto, hex, oscurecer, aclarar,
-  entrarEscena, irA, confeti, chispas, asegurarTexturas, aparecer, respirar, sacudir, COLORES_FIESTA,
+  entrarEscena, irA, confeti, chispas, asegurarTexturas, aparecer, respirar, sacudir, COLORES_FIESTA, toque,
 } from '../ClayUI.js';
 
 // Colores de la serpiente de plastilina (combinan con assets/snake_head.png)
@@ -104,26 +104,13 @@ export default class PuzzleScene extends Phaser.Scene {
         ? idxBat + Math.abs(head0.c - bat.c) + Math.abs(head0.r - bat.r)
         : this.SNAKE_LENGTH);
 
-    // ── zonas fijas ──
-    // Mismo layout en escritorio y en móvil: la resolución lógica es siempre 800x600
-    // y el pad grande a la derecha queda justo bajo el pulgar en un celular apaisado.
-    const HUD_H  = 70;
-    const CTRL_W = 230;
-    const TRAY_H = 66;
-    const PAD    = 10;
-    const MARCO  = 16;                    // borde de madera alrededor de las fichas
-    const CTRL_X = width - CTRL_W;
-    this.CTRL_X = CTRL_X;
-    this.TRAY_Y = height - TRAY_H / 2 - 6;
-
-    const gridZoneW = CTRL_X - PAD * 2 - MARCO * 2;
-    const gridZoneH = height - HUD_H - TRAY_H - PAD * 2 - MARCO * 2;
-
+    // ── layout: dos modos según el ancho lógico (ver main.js) ──
+    this.LY = this._calcularLayout(width, height);
+    const LY = this.LY;
     const GAP     = 5;
-    const maxTile = 72;
-    const tileW   = Math.floor((gridZoneW - (this.COLS - 1) * GAP) / this.COLS);
-    const tileH   = Math.floor((gridZoneH - (this.ROWS - 1) * GAP) / this.ROWS);
-    this.TILE     = Math.min(tileW, tileH, maxTile);
+    const tileW   = Math.floor((LY.zona.w - (this.COLS - 1) * GAP) / this.COLS);
+    const tileH   = Math.floor((LY.zona.h - (this.ROWS - 1) * GAP) / this.ROWS);
+    this.TILE     = Math.min(tileW, tileH, LY.maxTile);
     this.GAP      = GAP;
 
     const gridW  = this.COLS * this.TILE + (this.COLS - 1) * GAP;
@@ -131,8 +118,8 @@ export default class PuzzleScene extends Phaser.Scene {
     this.gridW = gridW; this.gridH = gridH;
 
     // centrar el grid en su zona
-    this.originX = PAD + MARCO + Math.floor((gridZoneW - gridW) / 2);
-    this.originY = HUD_H + PAD + MARCO + Math.floor((gridZoneH - gridH) / 2);
+    this.originX = LY.zona.x + Math.floor((LY.zona.w - gridW) / 2);
+    this.originY = LY.zona.y + Math.floor((LY.zona.h - gridH) / 2);
 
     asegurarTexturas(this);
     this._dibujarFondo(width, height);
@@ -151,12 +138,13 @@ export default class PuzzleScene extends Phaser.Scene {
     this.btnReiniciar = null;
     this._latidoReinicio = null;
 
-    this._crearHUD(CTRL_X);
+    this._crearHUD();
     this._calcularRuta();
     this._dibujarCamino();
     this._crearBandeja();
-    this._crearControles(CTRL_X, width, HUD_H, height);
+    this._crearControles();
     this._crearParticulas();
+    this._activarArrastre();
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-R', () => this._reiniciar());
@@ -295,7 +283,8 @@ export default class PuzzleScene extends Phaser.Scene {
   _dibujarFondo(width, height) {
     const bgKey = SpriteConfig.get('cuarto', 'bg');
     if (bgKey && this.textures.exists(bgKey)) {
-      this.add.image(0, 0, bgKey).setOrigin(0).setDisplaySize(width, height).setDepth(Z.fondo);
+      const bg = this.add.image(width / 2, height / 2, bgKey).setDepth(Z.fondo);
+      bg.setScale(Math.max(width / bg.width, height / bg.height));
     }
     this.add.rectangle(0, 0, width, height, 0x2a1a0e, 0.58).setOrigin(0).setDepth(Z.fondo);
     // viñeta suave: oscurece bordes, concentra la mirada en el centro
@@ -504,34 +493,77 @@ export default class PuzzleScene extends Phaser.Scene {
   // Nada de eso le servía a un chico que no lee. Ahora: casita (volver), mapa
   // (niveles), número de nivel, tres estrellas EN VIVO (se caen si se pasa del
   // óptimo: "más corto = mejor" sin una sola palabra), reiniciar, pista y sonido.
-  _crearHUD(ctrlX) {
-    const y = 38;
-    boton(this, 40, y, { w: 54, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }).setDepth(Z.hud);
-    this.btnMapa = boton(this, 102, y, { w: 54, fill: CLAY.lila, icono: 'mapa',
+  // Dónde va cada cosa. Dos modos:
+  //   clásico (4:3 a 16:10, tabletas): HUD arriba, tablero, bandeja abajo, pad a la derecha.
+  //   ancho (teléfonos apaisados, monitores 16:9): tres columnas — botones, estrellas y
+  //     bandeja a la izquierda; el tablero a todo el alto en el medio; arriba a la derecha
+  //     reiniciar/pista/sonido y debajo un pad grande. En un teléfono el alto es lo que
+  //     manda (el juego se ve al ~65 %), así que liberar el alto es lo que agranda fichas.
+  _calcularLayout(width, height) {
+    const MARCO = 16;
+    if (width < 1000) {
+      const HUD_H = 70, CTRL_W = 230, TRAY_H = 66, PAD = 10;
+      const ctrlX = width - CTRL_W, y = 38, cx = ctrlX / 2 + 50;
+      return {
+        modo: 'clasico', maxTile: 72, B: 54,
+        zona: { x: PAD + MARCO, y: HUD_H + PAD + MARCO, w: ctrlX - 2 * (PAD + MARCO), h: height - HUD_H - TRAY_H - 2 * (PAD + MARCO) },
+        casita: { x: 40, y }, mapa: { x: 102, y },
+        pill: { x: cx - 92, y }, estrellas: { x: cx - 30, y: y - 2, paso: 46 },
+        reiniciar: { x: ctrlX + 46, y }, pista: { x: ctrlX + 110, y }, sonido: { x: ctrlX + 172, y, w: 46 },
+        bandeja: { vertical: false, cx: ctrlX / 2, cy: height - TRAY_H / 2 - 6, largo: ctrlX - 60 },
+        pad: { cx: ctrlX + CTRL_W / 2, cy: HUD_H + (height - HUD_H) / 2 + 10, S: 76 },
+      };
+    }
+    const PAD = 12;
+    const lado = height - 2 * (PAD + MARCO);              // tablero cuadrado a todo el alto
+    const resto = width - (lado + 2 * (PAD + MARCO));
+    const L = Math.round(resto * 0.42), R = resto - L;
+    const B = window.isMobile ? 76 : 60;
+    const cxL = L / 2, cxR = width - R / 2, y = 18 + B / 2;
+    const dos = L >= 2 * B + 34;                            // ¿entran casita y mapa lado a lado?
+    const yPill = dos ? y + B / 2 + 50 : y + B + 60;
+    const yEst = yPill + 56;
+    const yBand = yEst + 40;
+    const S = Math.max(70, Math.min(120, (R - 24) / 2.8));
+    return {
+      modo: 'ancho', maxTile: 100, B,
+      zona: { x: L + PAD + MARCO, y: PAD + MARCO, w: lado, h: lado },
+      casita: dos ? { x: cxL - B / 2 - 8, y } : { x: cxL, y },
+      mapa:   dos ? { x: cxL + B / 2 + 8, y } : { x: cxL, y: y + B + 12 },
+      pill: { x: cxL, y: yPill }, estrellas: { x: cxL - 46, y: yEst, paso: 46 },
+      reiniciar: { x: cxR - B - 12, y }, pista: { x: cxR, y }, sonido: { x: cxR + B + 12, y, w: Math.round(B * 0.85) },
+      bandeja: { vertical: true, cx: cxL, y0: yBand, largo: height - yBand - 14 },
+      pad: { cx: cxR, cy: (y + B / 2 + 12 + height) / 2, S },
+    };
+  }
+
+  _crearHUD() {
+    const LY = this.LY, B = LY.B;
+    boton(this, LY.casita.x, LY.casita.y, { w: B, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }).setDepth(Z.hud);
+    this.btnMapa = boton(this, LY.mapa.x, LY.mapa.y, { w: B, fill: CLAY.lila, icono: 'mapa',
       onTap: () => irA(this, 'LevelSelectScene', { desde: this.nivelIdx }) }).setDepth(Z.hud);
 
-    // número de nivel + estrellas en vivo, centrados sobre el tablero
-    const cx = ctrlX / 2 + 50;
-    const pill = this.add.container(cx - 92, y).setDepth(Z.hud);
+    // número de nivel + estrellas en vivo
+    const pill = this.add.container(LY.pill.x, LY.pill.y).setDepth(Z.hud);
     pill.add(losa(this, 0, 0, 58, 54, { fill: CLAY.cremaClaro, r: 18, canto: 6, grosor: 3 }));
     pill.add(this.add.text(0, -3, `${this.nivelIdx + 1}`, estiloTexto(26, hex(CLAY.bordeOscuro), '#fff6e0', 2)).setOrigin(0.5));
 
     this.estrellasVivas = 3;
     this.estrellasHUD = [];
     for (let i = 0; i < 3; i++) {
-      const st = estrella(this, cx - 30 + i * 46, y - 2, true, 40).setDepth(Z.hud);
+      const st = estrella(this, LY.estrellas.x + i * LY.estrellas.paso, LY.estrellas.y, true, 40).setDepth(Z.hud);
       this.estrellasHUD.push(st);
     }
 
-    // reiniciar · pista · sonido sobre la columna del pad
-    this.btnReiniciar = boton(this, ctrlX + 46, y, { w: 54, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }).setDepth(Z.hud);
+    // reiniciar · pista · sonido
+    this.btnReiniciar = boton(this, LY.reiniciar.x, LY.reiniciar.y, { w: B, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }).setDepth(Z.hud);
 
-    this.pistaBtn = boton(this, ctrlX + 110, y, {
-      w: 54, fill: CLAY.verde, imagen: 'pista', sonido: null, onTap: () => this._revelarPista(),
+    this.pistaBtn = boton(this, LY.pista.x, LY.pista.y, {
+      w: B, fill: CLAY.verde, imagen: 'pista', sonido: null, onTap: () => this._revelarPista(),
     }).setDepth(Z.hud);
-    this.pistaBadge = insignia(this, ctrlX + 130, y - 20, GameState.pistas).setDepth(Z.hud + 1);
+    this.pistaBadge = insignia(this, LY.pista.x + B * 0.37, LY.pista.y - B * 0.37, GameState.pistas).setDepth(Z.hud + 1);
 
-    botonSonido(this, ctrlX + 172, y, 46, Z.hud);
+    botonSonido(this, LY.sonido.x, LY.sonido.y, LY.sonido.w, Z.hud);
     this._dibujarBotonPista();
   }
 
@@ -595,23 +627,29 @@ export default class PuzzleScene extends Phaser.Scene {
     this.bandejaAros  = [];
     if (!this.mostrarCamino) return;
 
+    // horizontal debajo del tablero (clásico) o vertical en la columna izquierda (ancho)
+    const BJ    = this.LY.bandeja;
     const comps = this.COMPONENTS;
     const n     = comps.length;
-    const paso  = Math.min(64, (this.CTRL_X - 60) / n);
-    const ancho = paso * n + 24;
-    const cx    = this.CTRL_X / 2;
-    const y     = this.TRAY_Y;
+    const paso  = Math.min(64, BJ.largo / n);
+    const largo = paso * n + 24;
+    this.bandejaR = Math.min(24, paso * 0.42);
+    const pos = i => BJ.vertical
+      ? { x: BJ.cx, y: BJ.y0 + 12 + paso * i + paso / 2 }
+      : { x: BJ.cx - largo / 2 + 12 + paso * i + paso / 2, y: BJ.cy };
 
-    const fondo = losa(this, cx, y + 3, ancho, 62, { fill: CLAY.madera, r: 22, canto: 6, grosor: 3, brillo: 0.15 });
+    const fondo = BJ.vertical
+      ? losa(this, BJ.cx, BJ.y0 + largo / 2 + 3, 62, largo, { fill: CLAY.madera, r: 26, canto: 6, grosor: 3, brillo: 0.15 })
+      : losa(this, BJ.cx, BJ.cy + 3, largo, 62, { fill: CLAY.madera, r: 22, canto: 6, grosor: 3, brillo: 0.15 });
     this.bandejaObjs.push(fondo.setDepth(Z.hud));
 
     comps.forEach((comp, i) => {
-      const x = cx - ancho / 2 + 12 + paso * i + paso / 2;
+      const { x, y } = pos(i);
       if (i < n - 1) {
         const f = this.add.graphics().setDepth(Z.hud);
         f.fillStyle(0xfff3d6, 0.9);
-        const ax = x + paso / 2;
-        f.fillTriangle(ax - 4, y - 6, ax + 5, y, ax - 4, y + 6);
+        if (BJ.vertical) { const ay = y + paso / 2; f.fillTriangle(x - 6, ay - 4, x + 6, ay - 4, x, ay + 5); }
+        else             { const ax = x + paso / 2; f.fillTriangle(ax - 4, y - 6, ax + 5, y, ax - 4, y + 6); }
         this.bandejaObjs.push(f);
       }
       const aro = this.add.graphics({ x, y }).setDepth(Z.hud);
@@ -625,7 +663,7 @@ export default class PuzzleScene extends Phaser.Scene {
 
   _actualizarBandeja() {
     if (!this.bandejaAros || !this.bandejaAros.length) return;
-    const r = Math.min(24, (Math.min(64, (this.CTRL_X - 60) / this.COMPONENTS.length)) * 0.42);
+    const r = this.bandejaR;
     this.COMPONENTS.forEach((comp, i) => {
       const aro = this.bandejaAros[i];
       if (!aro) return;
@@ -645,11 +683,11 @@ export default class PuzzleScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────
   // Controles — pad de flechas de plastilina
   // ─────────────────────────────────────────────────────────────────────────
-  _crearControles(ctrlX, width, hudH, height) {
-    const S    = 76;                       // tamaño de cada flecha (manos chiquitas)
+  _crearControles() {
+    const S    = this.LY.pad.S;            // tamaño de cada flecha (manos chiquitas)
     const sep  = S * 0.9;
-    const cx   = ctrlX + (width - ctrlX) / 2;
-    const cy   = hudH + (height - hudH) / 2 + 10;
+    const cx   = this.LY.pad.cx;
+    const cy   = this.LY.pad.cy;
 
     // base del pad: un platito de madera
     losa(this, cx, cy + 6, (sep + S / 2) * 2 + 12, (sep + S / 2) * 2 + 12, { fill: CLAY.madera, r: sep + S / 2 + 6, canto: 10, grosor: 4, brillo: 0.12 })
@@ -683,6 +721,41 @@ export default class PuzzleScene extends Phaser.Scene {
       });
       this.flechas[`${d.dc},${d.dr}`] = c;
     });
+  }
+
+  // ── arrastrar el dedo (o el mouse) por el tablero ──
+  // En una pantalla táctil lo natural es "dibujar" el camino: cada casilla vecina a la
+  // cabeza por la que pasa el dedo es un paso. También vale tocar la casilla de al lado.
+  // Si el dedo pasa por una casilla que no se puede pisar, simplemente no pasa nada
+  // (sin "bonk": arrastrando es fácil rozar el propio cuerpo sin querer).
+  _activarArrastre() {
+    this._arrastrando = false;
+    this.input.on('pointerdown', (p, sobre) => {
+      if (sobre && sobre.length) return;           // botón, flecha o interruptor: lo maneja él
+      this._arrastrando = !!this._celdaEn(p.worldX, p.worldY);
+      if (this._arrastrando) this._pasoArrastre(p);
+    });
+    this.input.on('pointermove', p => { if (this._arrastrando && p.isDown) this._pasoArrastre(p); });
+    this.input.on('pointerup', () => { this._arrastrando = false; });
+  }
+
+  // casilla bajo un punto de pantalla (o null si cae fuera del tablero)
+  _celdaEn(x, y) {
+    const paso = this.TILE + this.GAP;
+    const c = Math.floor((x - this.originX + this.GAP / 2) / paso);
+    const r = Math.floor((y - this.originY + this.GAP / 2) / paso);
+    return (c >= 0 && c < this.COLS && r >= 0 && r < this.ROWS) ? { c, r } : null;
+  }
+
+  _pasoArrastre(p) {
+    if (this.solved || this.enDemo) return;
+    const cel = this._celdaEn(p.worldX, p.worldY);
+    if (!cel) return;
+    const h = this.snake[0];
+    const dc = cel.c - h.c, dr = cel.r - h.r;
+    if (Math.abs(dc) + Math.abs(dr) !== 1) return;
+    if (this.snake.some(s => s.c === cel.c && s.r === cel.r)) return;
+    this._mover(dc, dr);
   }
 
   // ── partículas / energía ──
@@ -1124,7 +1197,8 @@ export default class PuzzleScene extends Phaser.Scene {
     if (!this.ruta) { this.enDemo = false; return; }
     const pasos = this.ruta.slice(1);
     // ojos que miran: "esto es para mirar"
-    const ojos = this.add.text(this.flechas['0,-1'].x, 112, '👀', { fontSize: '44px' }).setOrigin(0.5).setDepth(Z.manito);
+    const arriba = this.flechas['0,-1'];
+    const ojos = this.add.text(arriba.x, arriba.y - this.LY.pad.S * 1.05, '👀', { fontSize: '44px' }).setOrigin(0.5).setDepth(Z.manito);
     this.tweens.add({ targets: ojos, scale: 1.15, duration: 500, yoyo: true, repeat: -1 });
     this.demoObjs = [ojos];
 
@@ -1254,7 +1328,7 @@ export default class PuzzleScene extends Phaser.Scene {
     Sonido.victoria();
 
     this._encenderLed();
-    this.time.delayedCall(450, () => { if (this.scene.isActive()) confeti(this, this.CTRL_X / 2, this.scale.height + 10); });
+    this.time.delayedCall(450, () => { if (this.scene.isActive()) confeti(this, this.originX + this.gridW / 2, this.scale.height + 10); });
     this.time.delayedCall(850, () => {
       if (this.scene.isActive()) this._panelVictoria(estrellas, monedas, mejorEstr);
     });
@@ -1345,8 +1419,9 @@ export default class PuzzleScene extends Phaser.Scene {
 
     // Tutorial: en los niveles 1-4 sólo ↻ y ▶ (con la manito señalando el ▶); al ganar
     // el 5º, el botón grande es la casita: vuelta al cuarto, donde espera la tienda.
-    if (!this.enTutorial) panel.add(boton(this, -120, yB, { w: 66, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }));
-    panel.add(boton(this, this.enTutorial ? -90 : -40, yB, { w: 66, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }));
+    const bChico = toque(66);
+    if (!this.enTutorial) panel.add(boton(this, -132, yB, { w: bChico, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }));
+    panel.add(boton(this, this.enTutorial ? -90 : -44, yB, { w: bChico, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }));
     const guiar = (bx) => this.time.delayedCall(1700, () => {
       if (this.scene.isActive() && panel.active) mano(this, cx + bx, cy + yB + 6, { depth: Z.manito });
     });

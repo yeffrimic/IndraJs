@@ -14,7 +14,11 @@ alinear componentes en orden (BAT → R → CAP → LED, y cierra SW si lo hay) 
 - **ES6 modules nativos** (`import`/`export default`). **Sin bundler, sin npm, sin `package.json`, sin build step.** No agregar dependencias ni `node_modules`.
 - Cada archivo se sirve tal cual al navegador. Para probar **siempre con servidor local** (`npx serve .` o `python -m http.server`) — nunca `file://` (rompe los módulos).
 - Persistencia: **solo `localStorage`**, sin backend. Toda escritura pasa por `GameState`.
-- Resolución lógica fija **800×600**, `Scale.FIT` + `CENTER_BOTH`. El código se adapta con `window.isMobile` (definido en `main.js`).
+- **Alto lógico fijo de 600; el ancho acompaña la pantalla** (de 4:3 a 2,2:1, calculado en `main.js`),
+  `Scale.FIT` + `CENTER_BOTH`. Mobile first: se juega sobre todo en teléfonos y tabletas apaisados.
+  El cuarto y la tienda están calibrados sobre su dibujo de 800×600 y se centran con
+  `centrarEscenario()` (ClayUI); el puzzle tiene un layout "ancho" de tres columnas. Nunca asumir
+  `width === 800`. Todo lo tocable pasa por `toque()` (30 % más grande en táctil).
 
 ## Versión de Phaser — 3.60 exacto, evitar pitfalls
 

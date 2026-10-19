@@ -49,6 +49,7 @@ cuarto con un **regalo de bienvenida** (un mueble gratis entre tres) y desde ah�
 |---|---|
 | Flechas | mover al personaje |
 | `E` o tocar la burbuja | interactuar con lo que esté cerca |
+| Tocar el piso | el personaje camina hasta ahí |
 
 Sobre el **banco de trabajo** y la **tienda** flota una burbuja chiquita que llama de lejos; al
 acercarse crece a un botón (▶ / bolsita) que se puede tocar. En el celular no hay botón `E`: se toca
@@ -59,6 +60,7 @@ la burbuja.
 | Control | Acción |
 |---|---|
 | Flechas (teclado o pad en pantalla) | mover la serpiente |
+| Arrastrar el dedo por el tablero | la serpiente sigue al dedo, casilla por casilla |
 | `R` o botón ↻ | reiniciar el nivel |
 | Tocar un interruptor | abrirlo o cerrarlo |
 
@@ -159,7 +161,8 @@ bajo la clave `circuito_perfil_<nombre>`. Las escenas no duplican estado: leen y
 
 **Restricciones del proyecto.** Phaser 3.60 se carga por `<script>` desde CDN y es una **global** —
 nunca se importa. Módulos ES6 nativos, sin bundler ni `package.json`. Resolución lógica fija de
-800×600 con escalado `FIT`.
+600 de alto con ancho según la pantalla (4:3 a 2,2:1) y escalado `FIT`: pensado primero para teléfonos y
+tabletas apaisados.
 
 ---
 

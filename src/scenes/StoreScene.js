@@ -5,6 +5,7 @@ import Sonido           from '../Sonido.js';
 import {
   CLAY, losa, boton, icono, estiloTexto, entrarEscena, irA,
   respirar, sacudir, chispas, cartel, confeti, aparecer, COLORES_FIESTA,
+  toque, centrarEscenario, ESCENARIO,
 } from '../ClayUI.js';
 import { TIENDA, TIENDA_CATS, itemsDe } from '../tienda.js';
 import { PASO, REGALOS, mano } from '../Tutorial.js';
@@ -22,7 +23,7 @@ export default class StoreScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const width = ESCENARIO.w, height = ESCENARIO.h;   // calibrada sobre su dibujo de 800x600
     const W = width, H = height;
     this.isMobile = window.isMobile || false;
     entrarEscena(this);
@@ -34,6 +35,8 @@ export default class StoreScene extends Phaser.Scene {
 
     // ── fondo: pared + estantes de plastilina ──
     SpriteConfig.fondo(this, 'store', W, H, 0x0d0d1f);
+    // pantalla más ancha que 4:3 → la tienda queda centrada, con bandas a los costados
+    this.banda = centrarEscenario(this, SpriteConfig.get('fondos', 'store'));
 
     // posiciones (calibrables con el editor): tope de cada estante + bordes útiles
     this.shelfY  = this.layout.shelfY.slice();
@@ -47,7 +50,7 @@ export default class StoreScene extends Phaser.Scene {
     // ── botón volver ──
     const volver = () => irA(this, 'RoomScene');
     const vb = this.btnVolver = boton(this, this.layout.volver.x, this.layout.volver.y, {
-      w: 58, fill: CLAY.azul, icono: 'casita', onTap: () => { if (!this.editMode) volver(); },
+      w: toque(58), fill: CLAY.azul, icono: 'casita', onTap: () => { if (!this.editMode) volver(); },
     }).setDepth(20);
     this.editables.push({ nombre: 'volver', x: this.layout.volver.x, y: this.layout.volver.y, objs: [vb] });
 
@@ -72,7 +75,7 @@ export default class StoreScene extends Phaser.Scene {
 
   // ── layout de la tienda (posiciones, persistido) ──
   _layoutDefaultsTienda() {
-    const { width: W, height: H } = this.scale;
+    const { w: W, h: H } = ESCENARIO;
     return {
       shelfY:  [Math.round(0.245 * H), Math.round(0.515 * H), Math.round(0.785 * H)],
       shelfX0: Math.round(0.16 * W),
@@ -98,7 +101,7 @@ export default class StoreScene extends Phaser.Scene {
 
   // ── modo edición ──
   _iniciarEditorTienda() {
-    const { width: W, height: H } = this.scale;
+    const { w: W, h: H } = ESCENARIO;
     this.add.rectangle(0, 0, W, 24, 0x000000, 0.6).setOrigin(0).setDepth(300);
     this.add.text(8, 12, '✏️ EDITOR — arrastrá estantes (líneas) y paneles · [E] exportar (F12) · [R] reset', {
       fontSize: '10px', color: '#ffffff', fontFamily: FUENTE
@@ -181,13 +184,14 @@ export default class StoreScene extends Phaser.Scene {
       mejoras: { imagen: 'pista' },
       muebles: { imagen: SpriteConfig.get('muebles', 'sillon') || 'sillon' },
     };
-    const n = TIENDA_CATS.length, paso = 78;
+    const n = TIENDA_CATS.length, paso = toque(78);
+    y += (toque(68) - 68) / 2;          // que la pestaña grande no se salga por arriba
     const objs = [];
     TIENDA_CATS.forEach((cat, i) => {
       const x = cx + (i - (n - 1) / 2) * paso;
       const activa = cat.id === this.catActiva;
       const b = boton(this, x, y, {
-        w: activa ? 68 : 58, fill: activa ? CLAY.amarillo : CLAY.cremaClaro,
+        w: toque(activa ? 68 : 58), fill: activa ? CLAY.amarillo : CLAY.cremaClaro,
         colorIcono: activa ? 0xffffff : CLAY.bordeOscuro, ...iconos[cat.id],
         onTap: () => { if (!this.editMode && cat.id !== this.catActiva) { this.catActiva = cat.id; this._cambiarTab(); } },
       }).setDepth(20);
@@ -312,8 +316,8 @@ export default class StoreScene extends Phaser.Scene {
     }
     this.itemObjects.push(tag);
 
-    // nombre chiquito para el adulto
-    this.itemObjects.push(this.add.text(cx, tagY + 30, item.nombre, {
+    // nombre chiquito para el adulto (en un teléfono quedaría ilegible: ahí no va)
+    if (!window.isMobile) this.itemObjects.push(this.add.text(cx, tagY + 30, item.nombre, {
       fontSize: '11px', color: '#fff6e0', fontFamily: FUENTE, stroke: '#5a3a1a', strokeThickness: 3,
     }).setOrigin(0.5));
 
@@ -374,6 +378,6 @@ export default class StoreScene extends Phaser.Scene {
   }
 
   _feedback(msg, color) {
-    cartel(this, this.scale.width / 2, this.scale.height - 40, msg, { color });
+    cartel(this, ESCENARIO.w / 2, ESCENARIO.h - 40, msg, { color });
   }
 }
