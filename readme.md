@@ -9,6 +9,8 @@ y encenderlo.
 ![Sin build](https://img.shields.io/badge/build-ninguno-4caf50?style=flat-square)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-ce93d8?style=flat-square)
 
+**Jugar:** https://yeffrimic.github.io/IndraJs/ · **Manual ilustrado:** https://yeffrimic.github.io/IndraJs/manual.html
+
 ---
 
 ## Qué es
@@ -118,6 +120,7 @@ Abrir `http://localhost:3000` (o el puerto que informe el servidor).
 
 ```
 index.html               carga Phaser desde CDN y src/main.js
+manual.html              libro de instrucciones ilustrado (estilo manual de los 90)
 editor.html              editor de niveles          ⚠ ver "Estado de las herramientas"
 tester.html              probador de niveles        ⚠ ídem
 style-preview.html       mockup de estilo visual

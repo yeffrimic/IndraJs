@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual de Circuito</title>
+<meta name="description" content="Libro de instrucciones ilustrado de Circuito Puzzle: cómo se juega, cada componente y por qué van en ese orden.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Caveat:wght@500;700&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     Manual de Circuito — librito de instrucciones estilo años 90
+     (papel amarillento, capturas con cinta, notas a mano en birome
+     azul, y un "idioma de serpiente" que nadie sabe leer todavía).
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --papel:      #f4e9cf;
+    --papel-osc:  #e8d7af;
+    --tinta:      #3b2a1a;
+    --tinta-suave:#6e5537;
+    --birome:     #2a4fa8;
+    --lapiz:      #8a8172;
+    --rojo:       #d9473a;
+    --naranja:    #f08a3c;
+    --amarillo:   #f6c945;
+    --verde:      #6fae4a;
+    --azul:       #4aa8e0;
+    --lila:       #a77bd0;
+    --menta:      #5cc9a0;
+    --mesa:       #2a1a0e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--mesa);
+    background-image:
+      radial-gradient(ellipse at 20% 0%, #4a2e18 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, #3a2412 0%, transparent 55%);
+    color: var(--tinta);
+    font-family: "Fredoka", "Trebuchet MS", sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    padding: 40px 16px 80px;
+  }
+
+  /* ── la página de papel ── */
+  .pagina {
+    position: relative;
+    max-width: 860px;
+    margin: 0 auto 48px;
+    padding: 56px 64px 72px;
+    background-color: var(--papel);
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E"),
+      radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(150,110,50,.18) 100%);
+    box-shadow: 0 2px 0 #d8c59c, 0 18px 40px rgba(0,0,0,.45), inset 0 0 60px rgba(160,120,60,.15);
+    border-radius: 3px;
+  }
+  .pagina:nth-of-type(odd)  { transform: rotate(-.25deg); }
+  .pagina:nth-of-type(even) { transform: rotate(.3deg); }
+  /* esquina doblada */
+  .pagina.doblada::after {
+    content: ""; position: absolute; right: 0; top: 0; width: 46px; height: 46px;
+    background: linear-gradient(225deg, var(--mesa) 50%, var(--papel-osc) 50%);
+    box-shadow: -3px 3px 6px rgba(0,0,0,.18);
+  }
+  .folio {
+    position: absolute; bottom: 22px; font-family: "Bungee", sans-serif; font-size: 14px;
+    color: var(--tinta-suave); letter-spacing: 1px;
+  }
+  .folio.izq { left: 32px; } .folio.der { right: 32px; }
+  .cabecera {
+    position: absolute; top: 20px; left: 64px; right: 64px;
+    display: flex; justify-content: space-between;
+    font-family: "Bungee", sans-serif; font-size: 11px; letter-spacing: 2px; color: var(--tinta-suave);
+    border-bottom: 2px solid var(--tinta); padding-bottom: 4px;
+  }
+
+  /* ── tipografía ── */
+  h1, h2, h3 { font-family: "Bungee", sans-serif; font-weight: 400; line-height: 1.1; }
+  h2 {
+    font-size: 34px; margin: 18px 0 18px; color: var(--tinta);
+    text-shadow: 3px 3px 0 var(--amarillo);
+  }
+  h3 { font-size: 19px; margin: 26px 0 8px; color: var(--rojo); letter-spacing: .5px; }
+  p { margin: 0 0 12px; }
+  b, strong { font-weight: 600; }
+  .grande { font-size: 20px; }
+  .chico { font-size: 14px; color: var(--tinta-suave); }
+
+  /* ── notas a mano ── */
+  .nota {
+    font-family: "Caveat", cursive; font-size: 24px; line-height: 1.15; color: var(--birome);
+    transform: rotate(-3deg); display: inline-block;
+  }
+  .nota.lapiz { color: var(--lapiz); }
+  .nota.roja  { color: var(--rojo); }
+  .nota-flotante { position: absolute; max-width: 220px; }
+  .subrayado { background: linear-gradient(transparent 62%, rgba(246,201,69,.75) 62%, rgba(246,201,69,.75) 92%, transparent 92%); }
+  .tachado { text-decoration: line-through; text-decoration-color: var(--rojo); text-decoration-thickness: 2px; }
+
+  /* ── capturas pegadas con cinta ── */
+  .foto {
+    position: relative; background: #fff; padding: 10px 10px 14px; margin: 18px auto 26px;
+    box-shadow: 0 6px 16px rgba(60,40,10,.35); max-width: 640px;
+  }
+  .foto img { display: block; width: 100%; height: auto; }
+  .foto .pie { font-family: "Caveat", cursive; font-size: 22px; color: var(--tinta); text-align: center; margin-top: 6px; }
+  .foto::before, .foto::after {
+    content: ""; position: absolute; width: 96px; height: 26px; top: -12px;
+    background: rgba(246, 224, 160, .75); box-shadow: 0 1px 2px rgba(0,0,0,.15);
+  }
+  .foto::before { left: 12%; transform: rotate(-6deg); }
+  .foto::after  { right: 12%; transform: rotate(5deg); }
+  .foto.izq { transform: rotate(-1.4deg); } .foto.der { transform: rotate(1.2deg); }
+  .foto .anotar { position: absolute; inset: 10px 10px 14px; pointer-events: none; }
+  .foto.con-pie .anotar { bottom: 46px; }
+
+  /* ── recuadros noventeros ── */
+  .aviso {
+    border: 4px solid var(--tinta); background: #fff6dc; padding: 16px 20px 14px 76px;
+    position: relative; margin: 20px 0; box-shadow: 6px 6px 0 var(--tinta);
+  }
+  .aviso::before {
+    content: "!"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%; background: var(--rojo); color: #fff;
+    font-family: "Bungee", sans-serif; font-size: 28px; text-align: center; line-height: 46px;
+    border: 3px solid var(--tinta);
+  }
+  .aviso h4 { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 15px; letter-spacing: 1px; margin-bottom: 4px; }
+  .adulto {
+    border: 2px dashed var(--tinta-suave); padding: 14px 18px; margin: 22px 0; background: rgba(255,255,255,.35);
+    font-size: 15px;
+  }
+  .adulto h4 { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 13px; letter-spacing: 2px; color: var(--tinta-suave); margin-bottom: 6px; }
+  .estallido {
+    display: inline-grid; place-items: center; width: 110px; height: 110px;
+    background: var(--amarillo); color: var(--rojo);
+    font-family: "Bungee", sans-serif; font-size: 15px; text-align: center; line-height: 1.05;
+    clip-path: polygon(50% 0%, 61% 15%, 79% 7%, 80% 26%, 98% 30%, 88% 46%, 100% 61%, 82% 69%, 84% 88%, 65% 84%, 50% 100%, 37% 85%, 17% 92%, 16% 72%, 0% 64%, 11% 49%, 2% 32%, 20% 27%, 21% 8%, 39% 15%);
+    transform: rotate(12deg);
+  }
+
+  /* ── grillas ── */
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+
+  /* ── portada ── */
+  .portada {
+    text-align: center; padding-top: 70px; padding-bottom: 90px;
+    background-color: #f6c945;
+    background-image:
+      repeating-linear-gradient(135deg, rgba(255,255,255,.12) 0 18px, transparent 18px 36px),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .12 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+    border: 10px solid var(--tinta); border-radius: 6px;
+  }
+  .portada .franja {
+    font-family: "Bungee", sans-serif; font-size: 13px; letter-spacing: 4px; background: var(--tinta); color: var(--amarillo);
+    display: inline-block; padding: 6px 18px; margin-bottom: 24px;
+  }
+  .portada h1 {
+    font-family: "Bungee Shade", "Bungee", sans-serif; font-size: 86px; color: var(--rojo); letter-spacing: 2px;
+    text-shadow: 5px 5px 0 var(--tinta);
+  }
+  .portada .sub { font-family: "Bungee", sans-serif; font-size: 22px; letter-spacing: 6px; margin-top: 6px; }
+  .portada .heroe { position: relative; height: 270px; margin: 30px auto 12px; max-width: 520px; }
+  .portada .heroe img { position: absolute; filter: drop-shadow(6px 8px 0 rgba(59,42,26,.35)); }
+  .portada .sello {
+    position: absolute; right: 26px; bottom: 26px; width: 120px; height: 120px; border-radius: 50%;
+    border: 4px solid var(--tinta); background: #fff6dc; display: grid; place-items: center;
+    font-family: "Bungee", sans-serif; font-size: 11px; line-height: 1.15; text-align: center; transform: rotate(-14deg);
+    box-shadow: inset 0 0 0 5px #fff6dc, inset 0 0 0 7px var(--tinta);
+  }
+  .portada .datos {
+    display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 18px;
+  }
+  .portada .datos span {
+    font-family: "Bungee", sans-serif; font-size: 12px; border: 3px solid var(--tinta); padding: 5px 12px; background: #fff6dc;
+  }
+
+  /* ── índice ── */
+  .indice { list-style: none; margin: 16px 0; }
+  .indice li { display: flex; align-items: baseline; gap: 10px; font-size: 19px; padding: 5px 0; }
+  .indice li .puntos { flex: 1; border-bottom: 3px dotted var(--tinta-suave); transform: translateY(-5px); }
+  .indice li a { color: var(--tinta); text-decoration: none; font-weight: 500; }
+  .indice li a:hover { color: var(--rojo); }
+  .indice li .num { font-family: "Bungee", sans-serif; }
+
+  /* ── controles ── */
+  .tecla {
+    display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 10px;
+    border: 3px solid var(--tinta); border-radius: 8px; background: #fffaf0; box-shadow: 0 4px 0 var(--tinta);
+    font-family: "Bungee", sans-serif; font-size: 16px; margin: 0 3px 6px;
+  }
+  .flechas img { width: 60px; height: 60px; }
+  .flechas { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 2px; justify-content: center; }
+
+  /* ── tabla noventera ── */
+  table.tabla { width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 16px; }
+  .tabla th { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 13px; letter-spacing: 1px; text-align: left; background: var(--tinta); color: var(--papel); padding: 8px 10px; }
+  .tabla td { padding: 8px 10px; border-bottom: 2px solid rgba(59,42,26,.25); vertical-align: middle; }
+  .tabla tr:nth-child(even) td { background: rgba(255,255,255,.3); }
+  .estrellitas img { width: 22px; height: 22px; vertical-align: -5px; }
+  .ico { width: 26px; height: 26px; vertical-align: -7px; }
+
+  /* ── fichas de componente ── */
+  .ficha {
+    display: grid; grid-template-columns: 220px 1fr; gap: 30px; align-items: start; margin-top: 8px;
+  }
+  .ficha .retrato {
+    background: #fff6dc; border: 4px solid var(--tinta); box-shadow: 6px 6px 0 var(--tinta);
+    padding: 14px; text-align: center; position: relative;
+  }
+  .ficha .retrato img { width: 170px; height: 170px; object-fit: contain; filter: drop-shadow(3px 5px 0 rgba(59,42,26,.25)); }
+  .ficha .retrato .nombre { font-family: "Bungee", sans-serif; font-size: 18px; margin-top: 4px; }
+  .ficha .retrato .orden {
+    position: absolute; top: -18px; left: -18px; width: 48px; height: 48px; border-radius: 50%;
+    border: 4px solid var(--tinta); display: grid; place-items: center; color: #fff;
+    font-family: "Bungee", sans-serif; font-size: 20px;
+  }
+  .stats { list-style: none; margin-top: 14px; text-align: left; font-size: 14px; }
+  .stats li { display: flex; justify-content: space-between; border-bottom: 1px dashed rgba(59,42,26,.35); padding: 3px 0; }
+  .stats li b { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 11px; letter-spacing: 1px; color: var(--tinta-suave); }
+  .barra { display: inline-flex; gap: 2px; }
+  .barra i { width: 9px; height: 12px; border: 1.5px solid var(--tinta); }
+  .barra i.on { background: var(--naranja); }
+  .simbolo { display: block; margin: 8px auto 0; }
+  .vida-real { border-left: 6px solid var(--azul); padding: 4px 0 4px 16px; margin: 14px 0; }
+  .en-juego  { border-left: 6px solid var(--verde); padding: 4px 0 4px 16px; margin: 14px 0; }
+  .etiqueta { font-family: "Bungee", sans-serif; font-size: 12px; letter-spacing: 2px; display: block; color: var(--tinta-suave); }
+
+  /* ── orden / cadena ── */
+  .cadena { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 18px 0; }
+  .cadena .eslabon { text-align: center; width: 100px; }
+  .cadena .eslabon img { width: 74px; height: 74px; object-fit: contain; background: #fff6dc; border: 3px solid var(--tinta); border-radius: 50%; padding: 6px; }
+  .cadena .eslabon span { display: block; font-family: "Bungee", sans-serif; font-size: 11px; margin-top: 4px; }
+  .cadena .flecha { font-family: "Bungee", sans-serif; font-size: 26px; color: var(--rojo); }
+
+  /* ── idioma de serpiente (glifos) ── */
+  .glifos { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 3px; vertical-align: middle; }
+  .glifos svg { width: 22px; height: 30px; }
+  .glifos.grandes svg { width: 34px; height: 46px; }
+  .glifos path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .glifos circle { fill: none; stroke: currentColor; stroke-width: 2; }
+
+  .secreta { background-color: #1f2a3a; color: #e8dcc0; }
+  .secreta h2 { color: #e8dcc0; text-shadow: 3px 3px 0 #4a6a9a; }
+  .secreta .folio, .secreta .cabecera { color: #9aa8c0; border-color: #9aa8c0; }
+  .secreta .nota { color: #f6c945; }
+
+  .contra { text-align: center; background-color: var(--tinta); color: var(--papel); }
+  .contra h2 { color: var(--amarillo); text-shadow: 3px 3px 0 var(--rojo); }
+  .contra .folio { color: var(--papel-osc); }
+
+  a.jugar {
+    display: inline-block; margin-top: 18px; font-family: "Bungee", sans-serif; font-size: 20px; color: #fff; text-decoration: none;
+    background: var(--verde); border: 4px solid var(--tinta); border-radius: 14px; padding: 12px 26px; box-shadow: 0 6px 0 var(--tinta);
+  }
+  a.jugar:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--tinta); }
+
+  /* ── teléfono ── */
+  @media (max-width: 720px) {
+    body { padding: 20px 10px 60px; font-size: 16px; }
+    .pagina { padding: 46px 20px 64px; }
+    .cabecera { left: 20px; right: 20px; }
+    .portada h1 { font-size: 46px; }
+    .portada .heroe { height: 190px; }
+    .portada .heroe img { transform: scale(.72); transform-origin: top center; }
+    .portada .sello { width: 92px; height: 92px; font-size: 9px; right: 10px; bottom: 10px; }
+    h2 { font-size: 26px; }
+    .dos, .tres { grid-template-columns: 1fr; }
+    .ficha { grid-template-columns: 1fr; }
+    .ficha .retrato { max-width: 260px; margin: 0 auto; }
+    .nota-flotante { position: static; display: block; margin: 8px 0; max-width: none; }
+    .tabla { font-size: 14px; }
+    .cadena .eslabon { width: 76px; }
+    .cadena .eslabon img { width: 58px; height: 58px; }
+  }
+
+  /* ── para imprimir en el aula ── */
+  @media print {
+    body { background: none; padding: 0; }
+    .pagina { box-shadow: none; transform: none !important; margin: 0; page-break-after: always; max-width: none; }
+    .pagina.doblada::after { display: none; }
+    a.jugar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ PORTADA ═══════════════════════════ -->
+<section class="pagina portada">
+  <div class="franja">LIBRO DE INSTRUCCIONES</div>
+  <h1>CIRCUITO</h1>
+  <div class="sub">PUZZLE</div>
+  <div class="heroe">
+    <img src="assets/snake_head.png"  alt="" style="width:190px; left:4%;  top:40px; transform:rotate(-8deg)">
+    <img src="assets/comp_bat.png"    alt="" style="width:150px; left:36%; top:96px; transform:rotate(10deg)">
+    <img src="assets/comp_r.png"      alt="" style="width:170px; left:52%; top:10px; transform:rotate(-14deg)">
+    <img src="assets/comp_led.png"    alt="" style="width:150px; right:2%; top:110px; transform:rotate(6deg)">
+  </div>
+  <p class="glifos grandes" data-texto="la luz sigue al que sigue el camino" style="color:var(--tinta)"></p>
+  <div class="datos">
+    <span>1 JUGADOR</span><span>EDADES 6 · 7 · 8</span><span>50 NIVELES</span>
+  </div>
+  <div class="sello">SELLO DE<br>CALIDAD<br>CREABOT<br>★ 1990-ALGO ★</div>
+  <span class="folio izq" style="color:var(--tinta)">CREABOT · GUATEMALA</span>
+</section>
+
+<!-- ═══════════════════════════ ÍNDICE ═══════════════════════════ -->
+<section class="pagina doblada">
+  <div class="cabecera"><span>CIRCUITO</span><span>ÍNDICE</span></div>
+  <h2>Contenido</h2>
+  <ul class="indice">
+    <li><span class="num">1</span><a href="#antes">Antes de empezar</a><span class="puntos"></span><span class="num">3</span></li>
+    <li><span class="num">2</span><a href="#historia">La historia de la serpiente</a><span class="puntos"></span><span class="num">4</span></li>
+    <li><span class="num">3</span><a href="#controles">Controles</a><span class="puntos"></span><span class="num">5</span></li>
+    <li><span class="num">4</span><a href="#cuarto">Tu cuarto</a><span class="puntos"></span><span class="num">6</span></li>
+    <li><span class="num">5</span><a href="#tablero">El tablero</a><span class="puntos"></span><span class="num">7</span></li>
+    <li><span class="num">6</span><a href="#reglas">Las reglas de la serpiente</a><span class="puntos"></span><span class="num">8</span></li>
+    <li><span class="num">7</span><a href="#componentes">Los componentes</a><span class="puntos"></span><span class="num">9</span></li>
+    <li><span class="num">8</span><a href="#orden">¿Por qué en ese orden?</a><span class="puntos"></span><span class="num">15</span></li>
+    <li><span class="num">9</span><a href="#estrellas">Estrellas y monedas</a><span class="puntos"></span><span class="num">17</span></li>
+    <li><span class="num">10</span><a href="#ayudas">Ayudas</a><span class="puntos"></span><span class="num">18</span></li>
+    <li><span class="num">11</span><a href="#tienda">La tienda y el mapa</a><span class="puntos"></span><span class="num">19</span></li>
+    <li><span class="num">12</span><a href="#consejos">Consejos de experto</a><span class="puntos"></span><span class="num">20</span></li>
+  </ul>
+  <p class="nota" style="display:block; text-align:right; margin:22px 30px 0 0; transform:rotate(-5deg)">
+    falta una página...<br>¿dónde está la 21?
+  </p>
+  <span class="folio der">2</span>
+</section>
+
+<!-- ═══════════════════════════ ANTES DE EMPEZAR ═══════════════════════════ -->
+<section class="pagina" id="antes">
+  <div class="cabecera"><span>CIRCUITO</span><span>ANTES DE EMPEZAR</span></div>
+  <h2>Antes de empezar</h2>
+  <p class="grande">Gracias por elegir <b>Circuito</b>. Este librito explica cómo se juega, qué es cada pieza
+  y por qué la electricidad las recorre en un orden.</p>
+
+  <div class="aviso">
+    <h4>LÉELO CON UN ADULTO</h4>
+    El juego está hecho para chicos de 6 a 8 años, y se puede jugar <b>sin saber leer</b>: todo se entiende
+    mirando colores, dibujos y animaciones. Este manual es para la persona grande que acompaña,
+    o para el jugador que ya lee y quiere saber <i>por qué</i>.
+  </div>
+
+  <div class="dos">
+    <div>
+      <h3>Para jugar necesitas</h3>
+      <p>Una computadora, tableta o celular con navegador. En el celular, ponlo <b>acostado</b>
+      (horizontal). No hay nada que instalar.</p>
+      <h3>Cuánto se juega</h3>
+      <p>Hasta <b>10 niveles nuevos por día</b>. Repetir los que ya pasaste no gasta ese cupo.
+      Es a propósito: los circuitos se aprenden mejor de a poco.</p>
+    </div>
+    <div class="foto der con-pie">
+      <img src="assets/manual/login.jpg" alt="Pantalla de inicio con seis perfiles">
+      <div class="pie">elige tu tarjeta (¡y tu personaje!)</div>
+    </div>
+  </div>
+  <p class="nota" style="margin-top:10px">← la primera vez te pregunta si juegas con el nene o con la nena</p>
+  <span class="folio izq">3</span>
+</section>
+
+<!-- ═══════════════════════════ HISTORIA ═══════════════════════════ -->
+<section class="pagina doblada" id="historia">
+  <div class="cabecera"><span>CIRCUITO</span><span>LA HISTORIA</span></div>
+  <h2>La historia de la serpiente</h2>
+  <div class="dos">
+    <div>
+      <p class="grande">En el banco de trabajo de tu cuarto vive una <b>serpiente de plastilina</b> muy especial:
+      <span class="subrayado">es la corriente eléctrica</span>.</p>
+      <p>Cuando toca una <b>batería</b>, se llena de energía y el cuerpo se le pone amarillo y chispeante.
+      Esa energía viaja por todo su cuerpo hasta la cabeza.</p>
+      <p>Tu misión es guiarla por el tablero para que su cuerpo quede <b>apoyado sobre cada pieza
+      del circuito, en el orden justo</b>. Cuando lo logras, la electricidad llega hasta el final y…</p>
+      <p style="font-family:Bungee; font-size:26px; color:var(--rojo); margin-top:10px">¡SE PRENDE LA LUZ!</p>
+    </div>
+    <div style="text-align:center">
+      <img src="assets/snake_head.png" alt="La cabeza de la serpiente" style="width:200px; transform:rotate(-6deg); filter:drop-shadow(5px 7px 0 rgba(59,42,26,.25))">
+      <p class="nota" style="display:block; margin-top:6px">¡hola! soy la corriente 〜</p>
+      <img src="assets/comp_led.png" alt="Un LED rojo" style="width:110px; margin-top:16px">
+      <p class="nota roja">este es el premio</p>
+    </div>
+  </div>
+  <h3>¿Por qué una serpiente?</h3>
+  <p>Porque en un circuito como estos la corriente recorre <b>un solo camino, sin ramas</b>, igual que el
+  cuerpo de una serpiente. Los electricistas lo llaman <b>circuito en serie</b>.</p>
+  <span class="folio der">4</span>
+</section>
+
+<!-- ═══════════════════════════ CONTROLES ═══════════════════════════ -->
+<section class="pagina" id="controles">
+  <div class="cabecera"><span>CIRCUITO</span><span>CONTROLES</span></div>
+  <h2>Controles</h2>
+  <div class="dos">
+    <div style="text-align:center">
+      <div class="flechas">
+        <span></span><img src="assets/ui/btn_up.png" alt="arriba"><span></span>
+        <img src="assets/ui/btn_left.png" alt="izquierda"><span></span><img src="assets/ui/btn_right.png" alt="derecha">
+        <span></span><img src="assets/ui/btn_down.png" alt="abajo"><span></span>
+      </div>
+      <p class="nota" style="margin-top:10px">en la pantalla o en el teclado</p>
+    </div>
+    <div>
+      <table class="tabla">
+        <tr><th>Haces esto</th><th>Pasa esto</th></tr>
+        <tr><td><span class="tecla">←</span><span class="tecla">→</span><span class="tecla">↑</span><span class="tecla">↓</span></td><td>Te mueves. En el puzzle, la serpiente avanza <b>una casilla</b> por toque.</td></tr>
+        <tr><td><span class="tecla">E</span> o tocar la burbuja</td><td>Usas lo que tienes cerca en el cuarto.</td></tr>
+        <tr><td><span class="tecla">R</span> o el botón ↻</td><td>Empiezas el nivel de nuevo.</td></tr>
+        <tr><td>Tocar un interruptor</td><td>Lo cierras para que pase la corriente.</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="aviso">
+    <h4>NO HAY LETRAS EN LOS BOTONES</h4>
+    Todos los botones tienen un dibujo: la <b>casita</b> vuelve al cuarto, el <b>mapa</b> abre los niveles,
+    la <b>flecha redonda</b> reinicia, el <b>foco</b> da una pista y el <b>parlante</b> apaga el sonido.
+    Si un botón se sacude y hace "bonk", es que ahora no se puede.
+  </div>
+  <span class="folio izq">5</span>
+</section>
+
+<!-- ═══════════════════════════ CUARTO ═══════════════════════════ -->
+<section class="pagina doblada" id="cuarto">
+  <div class="cabecera"><span>CIRCUITO</span><span>TU CUARTO</span></div>
+  <h2>Tu cuarto</h2>
+  <div class="foto izq con-pie">
+    <img src="assets/manual/cuarto.jpg" alt="El cuarto con el banco de trabajo y la tienda">
+    <svg class="anotar" viewBox="0 0 800 600" preserveAspectRatio="none">
+      <ellipse cx="410" cy="178" rx="60" ry="50" fill="none" stroke="#2a4fa8" stroke-width="4" stroke-dasharray="3 0" transform="rotate(-8 410 178)"/>
+      <ellipse cx="735" cy="490" rx="78" ry="90" fill="none" stroke="#d9473a" stroke-width="4" transform="rotate(10 735 490)"/>
+      <ellipse cx="200" cy="34" rx="200" ry="28" fill="none" stroke="#2a4fa8" stroke-width="3" transform="rotate(-1 200 34)"/>
+    </svg>
+    <div class="pie">acércate al banco y aparece el botón ▶</div>
+  </div>
+  <div class="tres">
+    <div><span class="etiqueta">BANCO DE TRABAJO</span>Camina hasta él. La burbuja verde crece: tócala (o la tecla <b>E</b>) y entras al próximo nivel.</div>
+    <div><span class="etiqueta" style="color:var(--rojo)">LA TIENDA</span>El baúl de juguetes. Ahí gastas tus monedas (página 19).</div>
+    <div><span class="etiqueta">ARRIBA</span>Tus <img class="ico" src="assets/ui/moneda.png" alt="monedas"> monedas, tus <img class="ico" src="assets/ui/estrella_llena.png" alt="estrellas"> estrellas y tu <img class="ico" src="assets/ui/energia.png" alt="energía"> energía: los niveles que te quedan hoy.</div>
+  </div>
+  <p class="nota nota-flotante" style="right:40px; top:80px">los muebles que compres<br>aparecen acá ✓</p>
+  <span class="folio der">6</span>
+</section>
+
+<!-- ═══════════════════════════ TABLERO ═══════════════════════════ -->
+<section class="pagina" id="tablero">
+  <div class="cabecera"><span>CIRCUITO</span><span>EL TABLERO</span></div>
+  <h2>El tablero</h2>
+  <div class="foto der">
+    <img src="assets/manual/tablero.jpg" alt="Un nivel en juego con la serpiente encendida">
+    <svg class="anotar" viewBox="0 0 800 600" preserveAspectRatio="none" font-family="Bungee" font-size="22">
+      <g fill="#fff6dc" stroke="#3b2a1a" stroke-width="3">
+        <circle cx="40"  cy="88"  r="17"/><circle cx="102" cy="88"  r="17"/>
+        <circle cx="243" cy="88"  r="17"/><circle cx="352" cy="88"  r="17"/>
+        <circle cx="616" cy="88"  r="17"/><circle cx="742" cy="88"  r="17"/>
+        <circle cx="560" cy="340" r="17"/><circle cx="175" cy="520" r="17"/>
+        <circle cx="70"  cy="420" r="17"/><circle cx="430" cy="300" r="17"/>
+      </g>
+      <g fill="#3b2a1a" text-anchor="middle">
+        <text x="40"  y="96">1</text><text x="102" y="96">2</text><text x="243" y="96">3</text>
+        <text x="352" y="96">4</text><text x="616" y="96">5</text><text x="742" y="96">6</text>
+        <text x="560" y="348">7</text><text x="175" y="528">8</text><text x="70" y="428">9</text><text x="430" y="308">10</text>
+      </g>
+    </svg>
+  </div>
+  <div class="dos" style="font-size:15.5px">
+    <ol style="padding-left:22px">
+      <li><b>Casita</b> — volver al cuarto.</li>
+      <li><b>Mapa</b> — elegir otro nivel.</li>
+      <li><b>Número de nivel.</b></li>
+      <li><b>Estrellas en vivo</b> — si das demasiados pasos, se caen. ¡Cuídalas!</li>
+      <li><b>Empezar de nuevo.</b></li>
+    </ol>
+    <ol start="6" style="padding-left:22px">
+      <li><b>Sonido</b> sí / no.</li>
+      <li><b>Las flechas.</b></li>
+      <li><b>La bandeja</b>: las piezas en orden. Se marcan con ✓ cuando quedan conectadas.</li>
+      <li><b>La cueva</b> por donde entra la serpiente.</li>
+      <li><b>Piedritas</b>: el camino que conviene seguir.</li>
+    </ol>
+  </div>
+  <p class="nota nota-flotante" style="left:-6px; top:300px; transform:rotate(-10deg); max-width:90px">mirá: ¡ya<br>tiene luz!</p>
+  <span class="folio izq">7</span>
+</section>
+
+<!-- ═══════════════════════════ REGLAS ═══════════════════════════ -->
+<section class="pagina doblada" id="reglas">
+  <div class="cabecera"><span>CIRCUITO</span><span>LAS REGLAS</span></div>
+  <h2>Las reglas de la serpiente</h2>
+  <div class="dos">
+    <div>
+      <h3>1 · Sale de la cueva</h3>
+      <p>Al empezar, la serpiente está <b>toda enrollada en una casilla</b>: sólo ves la cabeza. Cada paso
+      que das, un pedacito más de cuerpo sale de la cueva detrás de ella.</p>
+      <h3>2 · Nunca hacia atrás</h3>
+      <p>No puede salirse del tablero ni <b>pisar su propio cuerpo</b>. Si lo intentas, se golpea la nariz
+      (bonk) y no se mueve.</p>
+      <h3>3 · Lleva piezas en el lomo</h3>
+      <p>Mira bien su cuerpo: algunas partes llevan una <b>bolita con una pieza dibujada</b>. Esa parte
+      del cuerpo tiene que terminar <b>exactamente encima</b> de la pieza igual en el tablero.</p>
+    </div>
+    <div>
+      <div class="foto izq con-pie">
+        <img src="assets/manual/inicio.jpg" alt="Primer nivel con la serpiente enrollada en la esquina">
+        <svg class="anotar" viewBox="0 0 800 600" preserveAspectRatio="none">
+          <ellipse cx="130" cy="146" rx="46" ry="42" fill="none" stroke="#d9473a" stroke-width="5" transform="rotate(-10 130 146)"/>
+          <ellipse cx="770" cy="372" rx="40" ry="44" fill="none" stroke="#2a4fa8" stroke-width="5"/>
+        </svg>
+        <div class="pie">nivel 1: toda enrollada en la cueva</div>
+      </div>
+      <h3>4 · ¡A encender!</h3>
+      <p>Cuando cada parte está en su lugar, el circuito se cierra, el LED se prende y ganas.
+      Si hay <b>interruptores</b>, al final tienes que <b>tocarlos</b> para cerrarlos.</p>
+    </div>
+  </div>
+  <p class="nota" style="margin-top:6px">la manito 👆 aparece si te quedas quieto en los primeros niveles</p>
+  <span class="folio der">8</span>
+</section>
+
+<!-- ═══════════════════════════ COMPONENTES: PORTADILLA ═══════════════════════════ -->
+<section class="pagina" id="componentes">
+  <div class="cabecera"><span>CIRCUITO</span><span>LOS COMPONENTES</span></div>
+  <h2>Los componentes</h2>
+  <p class="grande">Un <b>componente</b> es cada pieza de un circuito. En Circuito hay cinco.
+  Todos son de verdad: los vas a encontrar dentro de juguetes, linternas y computadoras.</p>
+  <div class="tres" style="margin-top:20px; text-align:center">
+    <div><img src="assets/comp_bat.png" alt="" style="width:120px"><br><b>Batería</b><br><span class="chico">da la energía</span></div>
+    <div><img src="assets/comp_r.png"   alt="" style="width:120px"><br><b>Resistencia</b><br><span class="chico">frena la corriente</span></div>
+    <div><img src="assets/comp_sw.png"  alt="" style="width:120px"><br><b>Interruptor</b><br><span class="chico">abre y cierra el paso</span></div>
+    <div><img src="assets/comp_c.png"   alt="" style="width:120px"><br><b>Capacitor</b><br><span class="chico">guarda un poquito de energía</span></div>
+    <div><img src="assets/comp_led.png" alt="" style="width:120px"><br><b>LED</b><br><span class="chico">se ilumina</span></div>
+    <div style="display:grid; place-items:center"><span class="estallido">¡CINCO<br>PIEZAS!</span></div>
+  </div>
+  <div class="aviso">
+    <h4>EL CÍRCULO DE COLOR</h4>
+    Cada pieza del tablero descansa en un <b>platito de su color</b>: azul la batería, lila la resistencia,
+    amarillo el interruptor, verde menta el capacitor y rojo el LED. Los chicos que no leen se guían
+    por eso, no por los números.
+  </div>
+  <span class="folio izq">9</span>
+</section>
+
+<!-- ═══════════════════════════ BATERÍA ═══════════════════════════ -->
+<section class="pagina doblada">
+  <div class="cabecera"><span>COMPONENTES</span><span>LA BATERÍA</span></div>
+  <h2>La batería</h2>
+  <div class="ficha">
+    <div class="retrato">
+      <span class="orden" style="background:var(--azul)">1</span>
+      <img src="assets/comp_bat.png" alt="Batería de plastilina">
+      <div class="nombre">BATERÍA</div>
+      <svg class="simbolo" width="150" height="50" viewBox="0 0 150 50" aria-label="símbolo eléctrico de la batería">
+        <path d="M5 25 H62 M88 25 H145" stroke="#3b2a1a" stroke-width="3" fill="none"/>
+        <path d="M62 6 V44" stroke="#3b2a1a" stroke-width="4"/><path d="M88 15 V35" stroke="#3b2a1a" stroke-width="7"/>
+        <text x="50" y="12" font-family="Bungee" font-size="12" fill="#d9473a">+</text>
+        <text x="96" y="12" font-family="Bungee" font-size="12" fill="#3b2a1a">−</text>
+      </svg>
+      <ul class="stats">
+        <li><b>APARECE</b><span>en todos los niveles</span></li>
+        <li><b>POSICIÓN</b><span>siempre primera</span></li>
+        <li><b>ENERGÍA</b><span class="barra"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="vida-real"><span class="etiqueta">EN LA VIDA REAL</span>
+        Es una cajita que guarda energía química y la convierte en electricidad. Tiene dos lados:
+        el <b>positivo (+)</b> y el <b>negativo (−)</b>. Cuando los unes con un camino de cables, la
+        corriente sale por un lado, recorre el camino y vuelve por el otro. Esa vuelta completa es un
+        <b>circuito</b> (de "círculo").</div>
+      <div class="en-juego"><span class="etiqueta">EN EL JUEGO</span>
+        Es el <b>enchufe de la serpiente</b>. En cuanto la toca, el cuerpo se llena de chispas amarillas
+        desde ese punto hacia la cabeza. Siempre es la pieza número 1 y la que salta primero
+        para decirte "¡ven aquí!".</div>
+      <p class="nota">truco: ve derechito a la batería.<br>todo lo demás se arma después →</p>
+    </div>
+  </div>
+  <span class="folio der">10</span>
+</section>
+
+<!-- ═══════════════════════════ RESISTENCIA ═══════════════════════════ -->
+<section class="pagina">
+  <div class="cabecera"><span>COMPONENTES</span><span>LA RESISTENCIA</span></div>
+  <h2>La resistencia</h2>
+  <div class="ficha">
+    <div class="retrato">
+      <span class="orden" style="background:var(--lila)">…</span>
+      <img src="assets/comp_r.png" alt="Resistencia de plastilina con bandas de colores">
+      <div class="nombre">RESISTENCIA</div>
+      <svg class="simbolo" width="150" height="50" viewBox="0 0 150 50" aria-label="símbolo eléctrico de la resistencia">
+        <path d="M5 25 H38 L45 10 L57 40 L69 10 L81 40 L93 10 L105 40 L112 25 H145" stroke="#3b2a1a" stroke-width="3" fill="none" stroke-linejoin="round"/>
+      </svg>
+      <ul class="stats">
+        <li><b>APARECE</b><span>desde el nivel 1</span></li>
+        <li><b>POSICIÓN</b><span>en el medio</span></li>
+        <li><b>FRENO</b><span class="barra"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="vida-real"><span class="etiqueta">EN LA VIDA REAL</span>
+        Es como un <b>tubo angosto</b> en una manguera: deja pasar el agua, pero menos. La resistencia
+        frena la corriente para que no llegue con demasiada fuerza. Las <b>rayitas de colores</b> son un
+        código secreto que dice cuánto frena.</div>
+      <div class="en-juego"><span class="etiqueta">EN EL JUEGO</span>
+        Aparece en todos los niveles, a veces dos o tres seguidas. Va <b>entre la batería y el LED</b>:
+        su trabajo es cuidar a la luz.</div>
+      <div class="adulto"><h4>PARA EL ADULTO</h4>
+        Un LED conectado directo a una pila de 9 V se quema en un instante: deja pasar toda la corriente
+        que puede. La resistencia "en serie" la limita. Es la primera regla que aprende cualquiera que
+        arma circuitos con LEDs, y por eso el juego nunca arma un circuito sin ella.</div>
+    </div>
+  </div>
+  <span class="folio izq">11</span>
+</section>
+
+<!-- ═══════════════════════════ INTERRUPTOR ═══════════════════════════ -->
+<section class="pagina doblada">
+  <div class="cabecera"><span>COMPONENTES</span><span>EL INTERRUPTOR</span></div>
+  <h2>El interruptor</h2>
+  <div class="ficha">
+    <div class="retrato">
+      <span class="orden" style="background:var(--amarillo); color:var(--tinta)">…</span>
+      <img src="assets/comp_sw.png" alt="Interruptor amarillo de plastilina">
+      <div class="nombre">INTERRUPTOR</div>
+      <svg class="simbolo" width="150" height="50" viewBox="0 0 150 50" aria-label="símbolo eléctrico del interruptor abierto">
+        <path d="M5 35 H50 M100 35 H145 M50 35 L96 12" stroke="#3b2a1a" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <circle cx="50" cy="35" r="4" fill="#3b2a1a"/><circle cx="100" cy="35" r="4" fill="#fff6dc" stroke="#3b2a1a" stroke-width="2"/>
+      </svg>
+      <ul class="stats">
+        <li><b>APARECE</b><span>desde el nivel 11</span></li>
+        <li><b>POSICIÓN</b><span>donde diga su número</span></li>
+        <li><b>PODER</b><span class="barra"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="vida-real"><span class="etiqueta">EN LA VIDA REAL</span>
+        Es el botón de la luz de tu casa. <b>Abierto</b>, el camino tiene un hueco y la corriente no puede
+        cruzar, como un puente levadizo levantado. <b>Cerrado</b>, el puente baja y pasa.</div>
+      <div class="en-juego"><span class="etiqueta">EN EL JUEGO</span>
+        Si la serpiente pasa por un interruptor abierto, las chispas <b>se frenan ahí</b> y no llegan a la
+        cabeza. Cuando todas las piezas están en su lugar, el interruptor larga ondas blancas:
+        <b>tócalo</b> y el circuito se completa.</div>
+    </div>
+  </div>
+  <div class="foto izq con-pie" style="max-width:520px">
+    <img src="assets/manual/switch.jpg" alt="Nivel con interruptor listo para tocar">
+    <div class="pie">todo en su lugar… ¡ahora toca el amarillo!</div>
+  </div>
+  <span class="folio der">12</span>
+</section>
+
+<!-- ═══════════════════════════ CAPACITOR ═══════════════════════════ -->
+<section class="pagina">
+  <div class="cabecera"><span>COMPONENTES</span><span>EL CAPACITOR</span></div>
+  <h2>El capacitor</h2>
+  <div class="ficha">
+    <div class="retrato">
+      <span class="orden" style="background:var(--menta)">…</span>
+      <img src="assets/comp_c.png" alt="Capacitor verde de plastilina con dos patitas">
+      <div class="nombre">CAPACITOR</div>
+      <svg class="simbolo" width="150" height="50" viewBox="0 0 150 50" aria-label="símbolo eléctrico del capacitor">
+        <path d="M5 25 H68 M82 25 H145" stroke="#3b2a1a" stroke-width="3" fill="none"/>
+        <path d="M68 6 V44 M82 6 V44" stroke="#3b2a1a" stroke-width="4"/>
+      </svg>
+      <ul class="stats">
+        <li><b>APARECE</b><span>tablero 8×8 (nivel 41+)</span></li>
+        <li><b>POSICIÓN</b><span>en el medio</span></li>
+        <li><b>GUARDA</b><span class="barra"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="vida-real"><span class="etiqueta">EN LA VIDA REAL</span>
+        Es como una <b>esponja de electricidad</b>: se llena rapidito y después suelta lo que guardó. Lo
+        usan los flashes de las cámaras para hacer un destello fuerte, y las computadoras para que la
+        energía llegue pareja.</div>
+      <div class="en-juego"><span class="etiqueta">EN EL JUEGO</span>
+        Es el componente de los expertos: aparece recién en el tablero grande de 8×8, donde los caminos
+        son largos y hay que planear mucho.</div>
+      <div class="adulto"><h4>PARA EL ADULTO</h4>
+        Aquí el juego simplifica. Con una pila, un capacitor puesto en serie sólo deja pasar corriente
+        mientras se carga: el LED daría un destello y se apagaría. En el juego se comporta como una
+        pieza más del camino. Si el chico pregunta, es una excelente pregunta.</div>
+    </div>
+  </div>
+  <div class="foto der" style="max-width:420px">
+    <img src="assets/manual/cap.jpg" alt="Tablero de 8 por 8 con un capacitor">
+  </div>
+  <span class="folio izq">13</span>
+</section>
+
+<!-- ═══════════════════════════ LED ═══════════════════════════ -->
+<section class="pagina doblada">
+  <div class="cabecera"><span>COMPONENTES</span><span>EL LED</span></div>
+  <h2>El LED</h2>
+  <div class="ficha">
+    <div class="retrato">
+      <span class="orden" style="background:var(--rojo); font-size:13px">FIN</span>
+      <img src="assets/comp_led.png" alt="LED rojo de plastilina">
+      <div class="nombre">LED</div>
+      <svg class="simbolo" width="150" height="56" viewBox="0 0 150 56" aria-label="símbolo eléctrico del LED">
+        <path d="M5 32 H55 M95 32 H145" stroke="#3b2a1a" stroke-width="3" fill="none"/>
+        <path d="M55 14 L55 50 L90 32 Z" fill="#fff6dc" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M92 14 V50" stroke="#3b2a1a" stroke-width="4"/>
+        <path d="M78 10 L90 0 M86 14 L98 4" stroke="#d9473a" stroke-width="2.5"/>
+        <path d="M86 0 L90 0 L90 4 M94 4 L98 4 L98 8" stroke="#d9473a" stroke-width="2.5" fill="none"/>
+      </svg>
+      <ul class="stats">
+        <li><b>APARECE</b><span>en todos los niveles</span></li>
+        <li><b>POSICIÓN</b><span>siempre última</span></li>
+        <li><b>BRILLO</b><span class="barra"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="vida-real"><span class="etiqueta">EN LA VIDA REAL</span>
+        LED quiere decir "diodo que emite luz". Es una lucecita que gasta poquísima energía; están en
+        los semáforos, en los controles remotos y en las pantallas. Tiene una manía: <b>sólo deja pasar
+        la corriente en un sentido</b>. Si lo pones al revés, no prende. Por eso tiene una patita más larga
+        (la que va del lado +).</div>
+      <div class="en-juego"><span class="etiqueta">EN EL JUEGO</span>
+        Es la <b>meta</b>. Siempre es la última pieza. Cuando la corriente lo alcanza, se enciende con un
+        sol rojo, caen las estrellas y se acaba el nivel.</div>
+      <div class="foto izq" style="max-width:340px; margin-top:6px">
+        <img src="assets/manual/victoria.jpg" alt="Pantalla de victoria con tres estrellas">
+      </div>
+    </div>
+  </div>
+  <span class="folio der">14</span>
+</section>
+
+<!-- ═══════════════════════════ POR QUÉ EL ORDEN (1) ═══════════════════════════ -->
+<section class="pagina" id="orden">
+  <div class="cabecera"><span>CIRCUITO</span><span>EL ORDEN</span></div>
+  <h2>¿Por qué en ese orden?</h2>
+  <p class="grande">En todos los niveles las piezas tienen número, y la serpiente las tiene que recorrer así:</p>
+  <div class="cadena">
+    <div class="eslabon"><img src="assets/comp_bat.png" alt=""><span>BATERÍA</span></div><span class="flecha">→</span>
+    <div class="eslabon"><img src="assets/comp_r.png"   alt=""><span>RESISTENCIA</span></div><span class="flecha">→</span>
+    <div class="eslabon"><img src="assets/comp_sw.png"  alt=""><span>INTERRUPTOR</span></div><span class="flecha">→</span>
+    <div class="eslabon"><img src="assets/comp_c.png"   alt=""><span>CAPACITOR</span></div><span class="flecha">→</span>
+    <div class="eslabon"><img src="assets/comp_led.png" alt=""><span>LED</span></div>
+  </div>
+  <p class="chico" style="text-align:center">(las del medio cambian según el nivel: su número dice cuál va antes)</p>
+
+  <h3>1 · La batería va primero porque es el principio</h3>
+  <p>La corriente no aparece de la nada: <b>sale de la batería</b>. Seguir un circuito es como leer un
+  cuento: se empieza por el principio. Por eso la serpiente primero va a buscar su energía.</p>
+
+  <h3>2 · El LED va último porque es la prueba</h3>
+  <p>Si el LED prende, quiere decir que la corriente <b>pudo pasar por todas las piezas anteriores</b>.
+  Si alguna faltara o el camino estuviera cortado, la luz no llegaría. Por eso la luz es la línea de llegada.</p>
+
+  <h3>3 · La resistencia va antes del LED para cuidarlo</h3>
+  <p>Así lo arman los electricistas: <b>+ → resistencia → LED → −</b>. Primero se frena la corriente
+  y recién después llega a la lucecita, que es delicada.</p>
+  <span class="folio izq">15</span>
+</section>
+
+<!-- ═══════════════════════════ POR QUÉ EL ORDEN (2) ═══════════════════════════ -->
+<section class="pagina doblada">
+  <div class="cabecera"><span>CIRCUITO</span><span>EL ORDEN (CONT.)</span></div>
+  <h2>Lo que la serpiente sabe</h2>
+  <div class="dos">
+    <div>
+      <svg viewBox="0 0 320 230" width="100%" aria-label="Esquema del circuito del nivel 1: batería, resistencia y LED en un lazo">
+        <g fill="none" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round">
+          <path d="M40 60 V40 H280 V190 H40 V160"/>
+          <path d="M40 160 V140" />
+        </g>
+        <!-- batería (vertical) -->
+        <path d="M22 140 H58" stroke="#3b2a1a" stroke-width="4"/>
+        <path d="M30 118 H50" stroke="#3b2a1a" stroke-width="8"/>
+        <path d="M40 118 V60" stroke="#3b2a1a" stroke-width="3"/>
+        <text x="62" y="146" font-family="Bungee" font-size="13" fill="#d9473a">+</text>
+        <text x="60" y="124" font-family="Bungee" font-size="13" fill="#3b2a1a">−</text>
+        <!-- resistencia en el tramo de arriba -->
+        <rect x="120" y="30" width="80" height="20" fill="#f4e9cf"/>
+        <path d="M120 40 L127 28 L139 52 L151 28 L163 52 L175 28 L187 52 L194 40 H200" stroke="#3b2a1a" stroke-width="3" fill="none"/>
+        <!-- LED en el tramo derecho -->
+        <rect x="268" y="90" width="24" height="56" fill="#f4e9cf"/>
+        <path d="M262 98 H298 L280 132 Z" fill="#fff6dc" stroke="#3b2a1a" stroke-width="3"/>
+        <path d="M262 134 H298" stroke="#3b2a1a" stroke-width="4"/>
+        <path d="M300 112 L314 104 M300 124 L314 116" stroke="#d9473a" stroke-width="2.5"/>
+        <!-- flechas de corriente -->
+        <g fill="#2a4fa8"><path d="M86 34 l10 6 -10 6z"/><path d="M274 70 l6 10 6 -10z"/><path d="M160 184 l-10 6 10 6z"/></g>
+        <text x="96" y="80" font-family="Caveat" font-size="22" fill="#2a4fa8">la corriente da la vuelta</text>
+      </svg>
+      <p class="chico" style="text-align:center">el nivel 1 dibujado como lo dibuja un ingeniero</p>
+      <p class="nota" style="display:block; text-align:center; margin-top:8px">¡el camino es un círculo! → circuito</p>
+    </div>
+    <div>
+      <h3 style="margin-top:0">La cola se queda en la batería</h3>
+      <p>Cuando ganas, la <b>cola</b> de la serpiente queda junto a la batería y la <b>cabeza</b> junto al LED:
+      su cuerpo es el cable que une todo, en el mismo orden en que viaja la corriente.</p>
+      <h3>¿Y el interruptor?</h3>
+      <p>En la vida real puede ir <b>en cualquier lugar</b> del camino: abierto, corta todo. En el juego su
+      número te dice dónde le toca.</p>
+    </div>
+  </div>
+  <div class="adulto"><h4>PARA EL ADULTO · LA VERDAD COMPLETA</h4>
+    En un circuito en serie la corriente es <b>la misma en todos los puntos</b>, así que eléctricamente la
+    resistencia protegería al LED también si estuviera después. Además, un circuito real tiene que <b>volver
+    al polo negativo</b> de la batería para cerrarse; la serpiente no dibuja esa vuelta.
+    El orden fijo del juego no es una ley de la física: es una <b>forma de leer el circuito siguiendo la
+    corriente</b>, del principio (la fuente) al final (la luz), con la resistencia antes del LED como lo
+    arma un electricista. Es lo que permite aprenderlo sin leer: se recorre, no se memoriza.
+  </div>
+  <span class="folio der">16</span>
+</section>
+
+<!-- ═══════════════════════════ ESTRELLAS Y MONEDAS ═══════════════════════════ -->
+<section class="pagina" id="estrellas">
+  <div class="cabecera"><span>CIRCUITO</span><span>ESTRELLAS Y MONEDAS</span></div>
+  <h2>Estrellas y monedas</h2>
+  <p>Cada nivel tiene un <b>número mágico</b>: los pasos mínimos para resolverlo. Cuanto más cerca
+  quedes, más estrellas ganas. Arriba del tablero ves las tres estrellas: si te pasas, se caen rodando.</p>
+  <table class="tabla">
+    <tr><th>Resultado</th><th>Cómo</th><th>Monedas</th></tr>
+    <tr><td class="estrellitas"><img src="assets/ui/estrella_llena.png" alt="★"><img src="assets/ui/estrella_llena.png" alt="★"><img src="assets/ui/estrella_llena.png" alt="★"></td><td>con los pasos justos</td><td><img class="ico" src="assets/ui/moneda.png" alt=""> 70</td></tr>
+    <tr><td class="estrellitas"><img src="assets/ui/estrella_llena.png" alt="★"><img src="assets/ui/estrella_llena.png" alt="★"><img src="assets/ui/estrella_vacia.png" alt="☆"></td><td>hasta una cuarta parte más de pasos</td><td><img class="ico" src="assets/ui/moneda.png" alt=""> 50</td></tr>
+    <tr><td class="estrellitas"><img src="assets/ui/estrella_llena.png" alt="★"><img src="assets/ui/estrella_vacia.png" alt="☆"><img src="assets/ui/estrella_vacia.png" alt="☆"></td><td>completado, como sea</td><td><img class="ico" src="assets/ui/moneda.png" alt=""> 25</td></tr>
+  </table>
+  <div class="dos">
+    <div>
+      <h3>Repetir sí paga… un poquito</h3>
+      <p>Si vuelves a jugar un nivel y <b>mejoras</b>, te dan la diferencia: de 2 a 3 estrellas ganas 20 monedas
+      más. Repetirlo igual no da nada. Así vale la pena buscar el camino perfecto.</p>
+    </div>
+    <div style="text-align:center">
+      <span class="estallido" style="width:130px; height:130px; font-size:14px">¡3 ESTRELLAS<br>= 70!</span>
+      <p class="nota" style="display:block; margin-top:10px">seguir las piedritas<br>da siempre 3 ★</p>
+    </div>
+  </div>
+  <span class="folio izq">17</span>
+</section>
+
+<!-- ═══════════════════════════ AYUDAS ═══════════════════════════ -->
+<section class="pagina doblada" id="ayudas">
+  <div class="cabecera"><span>CIRCUITO</span><span>AYUDAS</span></div>
+  <h2>Ayudas</h2>
+  <div class="dos">
+    <div>
+      <h3>La pieza que salta</h3>
+      <p>Siempre hay <b>una pieza que da saltitos</b> con ondas de su color: es a la que tienes que ir ahora.
+      Cuando la pisas con la cabeza, empieza a saltar la siguiente.</p>
+      <h3>Las piedritas</h3>
+      <p>Bolitas de colores en el tablero que marcan <b>un camino que funciona</b>, con los pasos justos.
+      En los <b>niveles 1 al 5 son gratis</b>. Después se encienden con una pista.</p>
+      <h3>Si te sales del camino</h3>
+      <p>¡No pasa nada! Las piedritas <b>se acomodan solas</b> a un camino nuevo desde donde estés. Y si ya
+      no hay salida, el botón <b>↻ late</b>: es hora de empezar de nuevo.</p>
+    </div>
+    <div>
+      <div style="text-align:center"><img src="assets/ui/pista.png" alt="Foco de pista" style="width:130px"></div>
+      <h3>Pistas</h3>
+      <p>Empiezas con <b>3 pistas</b>. Toca el foco verde y aparecen las piedritas y la bandeja con el orden de
+      las piezas. Si se te acaban, el foco te lleva a la tienda.</p>
+      <h3>La manito</h3>
+      <p>En los niveles 1, 2 y 3, si te quedas quieto un ratito, aparece una mano 👆 señalando la flecha
+      que conviene tocar.</p>
+    </div>
+  </div>
+  <span class="folio der">18</span>
+</section>
+
+<!-- ═══════════════════════════ TIENDA Y MAPA ═══════════════════════════ -->
+<section class="pagina" id="tienda">
+  <div class="cabecera"><span>CIRCUITO</span><span>TIENDA Y MAPA</span></div>
+  <h2>La tienda y el mapa</h2>
+  <div class="dos">
+    <div class="foto izq"><img src="assets/manual/tienda.jpg" alt="La tienda con muebles en los estantes"></div>
+    <div class="foto der"><img src="assets/manual/mapa.jpg" alt="El mapa de niveles con piedras numeradas"></div>
+  </div>
+  <table class="tabla">
+    <tr><th>En la tienda</th><th>Qué es</th><th>Precio</th></tr>
+    <tr><td><img class="ico" src="assets/ui/energia.png" alt=""> Energía</td><td>más niveles para hoy (+1, +3, +5 o recarga)</td><td>60 a 450</td></tr>
+    <tr><td>Tablero 6×6</td><td>niveles 11 a 40: llegan los interruptores</td><td>400</td></tr>
+    <tr><td>Tablero 8×8</td><td>niveles 41 a 50: el capacitor y caminos largos</td><td>700</td></tr>
+    <tr><td><img class="ico" src="assets/ui/pista.png" alt=""> Pistas</td><td>+3 focos</td><td>120</td></tr>
+    <tr><td>Muebles</td><td>17 cosas para decorar tu cuarto</td><td>240 a 700</td></tr>
+  </table>
+  <p><b>El mapa</b> muestra cada nivel como una piedra: <span style="color:var(--verde)"><b>verde</b></span> los que
+  ya pasaste (con sus estrellas), <span style="color:var(--naranja)"><b>naranja</b></span> los disponibles y gris con
+  candado los que faltan. Tu personaje se para encima del que te toca.</p>
+  <p class="nota" style="display:block; text-align:right; margin-top:4px">con 2 ★ de promedio alcanza para el tablero grande</p>
+  <span class="folio izq">19</span>
+</section>
+
+<!-- ═══════════════════════════ CONSEJOS ═══════════════════════════ -->
+<section class="pagina doblada" id="consejos">
+  <div class="cabecera"><span>CIRCUITO</span><span>CONSEJOS</span></div>
+  <h2>Consejos de experto</h2>
+  <ol style="padding-left:24px; font-size:18px">
+    <li style="margin-bottom:10px"><b>Primero la batería.</b> Ve derecho hacia ella: los pasos que des antes no cuentan para armar el circuito.</li>
+    <li style="margin-bottom:10px"><b>Mira las bolitas del lomo.</b> La distancia entre dos bolitas en el cuerpo es la misma que entre las dos piezas en el tablero.</li>
+    <li style="margin-bottom:10px"><b>No te encierres.</b> Antes de entrar en una esquina, piensa por dónde vas a salir.</li>
+    <li style="margin-bottom:10px"><b>El LED no es el final.</b> Después de pisarlo, da <b>un paso más</b>: la cabeza va vacía, delante de la luz.</li>
+    <li style="margin-bottom:10px"><b>Equivocarse es gratis.</b> El ↻ no te quita nada. Los mejores lo usan mucho.</li>
+  </ol>
+  <p class="nota" style="margin-top:10px">← el 4 me costó como 10 intentos descubrirlo</p>
+  <p class="nota lapiz" style="display:block; text-align:right; margin-top:30px">
+    <span class="tachado">el nivel 50 es imposible</span> &nbsp;no es imposible!!
+  </p>
+  <span class="folio der">20</span>
+</section>
+
+<!-- ═══════════════════════════ PÁGINA SECRETA ═══════════════════════════ -->
+<section class="pagina secreta" id="secreta">
+  <div class="cabecera"><span>⟡ ⟡ ⟡</span><span>21</span></div>
+  <h2>La página 21</h2>
+  <p class="glifos grandes" data-texto="las serpientes hablan en circuitos" style="color:#e8dcc0"></p>
+  <p style="margin-top:16px">Dicen que las serpientes de plastilina escriben en su propio idioma. Nadie lo descifró
+  todavía. Cada dibujo es una palabra, y cada palabra se arma con <b>líneas que unen puntos</b>…
+  como un circuito.</p>
+  <p class="glifos" data-texto="bateria" style="color:#f6c945"></p> <span class="nota">= ¿batería?</span><br>
+  <p class="glifos" data-texto="luz" style="color:#f6c945; margin-top:10px"></p> <span class="nota">= ¿luz??</span>
+  <p style="margin-top:22px">Si lo descubres, escribe la traducción aquí:</p>
+  <p style="border-bottom:2px dashed #9aa8c0; height:34px"></p>
+  <p style="border-bottom:2px dashed #9aa8c0; height:34px"></p>
+  <span class="folio izq">21</span>
+</section>
+
+<!-- ═══════════════════════════ CONTRATAPA ═══════════════════════════ -->
+<section class="pagina contra">
+  <h2>¡A jugar!</h2>
+  <img src="assets/snake_head.png" alt="" style="width:150px; margin:14px 0">
+  <p class="grande">Hecho a mano, con plastilina y cariño, en Guatemala.</p>
+  <p>Circuito Puzzle · Creabot · Yeffri Salazar</p>
+  <a class="jugar" href="./">▶ JUGAR AHORA</a>
+  <p class="chico" style="color:var(--papel-osc); margin-top:26px">Ninguna serpiente se quemó haciendo este manual.</p>
+  <span class="folio der">22</span>
+</section>
+
+<script>
+  // ── Idioma de serpiente ──
+  // Cada palabra es un glifo dibujado sobre un hexágono de 7 puntos (6 vértices + centro):
+  // las letras eligen qué líneas se trazan, así la misma palabra da siempre el mismo dibujo.
+  // Es decoración pura (un guiño a los manuales con idiomas inventados).
+  (function () {
+    const P = [[11, 3], [19, 8], [19, 20], [11, 25], [3, 20], [3, 8], [11, 14]];
+    const L = [];
+    for (let i = 0; i < 7; i++) for (let j = i + 1; j < 7; j++) L.push([i, j]);
+    const glifo = palabra => {
+      let h = 7;
+      for (const ch of palabra) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      const usadas = new Set();
+      for (let k = 0; k < 3 + (palabra.length % 3); k++) { usadas.add(h % L.length); h = (h * 1103515245 + 12345) >>> 0; }
+      let d = '';
+      usadas.forEach(i => { const [a, b] = L[i]; d += `M${P[a][0]} ${P[a][1]} L${P[b][0]} ${P[b][1]} `; });
+      const circulo = palabra.length > 4 ? '<circle cx="11" cy="28.5" r="1.6"/>' : '';
+      return `<svg viewBox="0 0 22 30" aria-hidden="true"><path d="${d}"/>${circulo}</svg>`;
+    };
+    document.querySelectorAll('.glifos').forEach(el => {
+      const palabras = el.dataset.texto.split(' ');
+      el.innerHTML = palabras.map(glifo).join('<span style="width:8px"></span>');
+      el.setAttribute('aria-label', 'texto en idioma de serpiente');
+    });
+  })();
+</script>
+</body>
+</html>
