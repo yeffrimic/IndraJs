@@ -47,6 +47,7 @@ No romper ninguna de estas:
 | `src/tienda.js` | catálogo y precios; el comentario de cabecera explica cómo se calcularon |
 | `src/SpriteConfig.js` | **registro central de assets** + la constante `FUENTE` |
 | `src/ClayUI.js` | **el lenguaje visual de todo el juego**: paleta, `losa`, `boton`, iconos vectoriales, `irA`/`entrarEscena`, confeti, estrellas, `cartel` |
+| `src/Tutorial.js` | pasos del recorrido guiado de la primera vez, regalos de bienvenida, manito y piedritas |
 | `src/Sonido.js` | efectos y música sintetizados con WebAudio; preferencia de silencio por dispositivo |
 | `src/dev-guard.js` | define `window.__DEV__` según hostname (script clásico, corre primero) |
 | `src/Dev.js` | `activo()` / `flag()` / `param()` para las escenas |
@@ -134,6 +135,15 @@ faltan P[k] - t pasos. Encuentra la ruta en el óptimo en los 50 niveles en meno
 se desvía, se recalcula desde ahí (presupuesto de nodos acotado); si no hay salida, late el ↻ y la
 manito lo señala. Cambiar las reglas de movimiento obliga a cambiar el solver igual.
 
+### El recorrido guiado es una máquina de pasos por perfil
+
+`GameState.tutorial` vale `inicio → puzzle → tienda → casa → listo` y se guarda con el perfil.
+Cada escena mira el paso al crearse y oculta o guía lo que corresponde (cuarto: fantasma + manito,
+tienda y mapa ocultos; nivel 1: demostración automática; tienda: sólo 3 regalos). **Los perfiles que
+ya tenían niveles hechos cargan como `listo`** (retro-compatibilidad), y los atajos de dev también lo
+fuerzan; para probarlo desde cero está `?nuevo` (perfil "Prueba" vacío). El regalo no cobra monedas:
+`GameState.regalarMueble` sólo funciona en el paso `tienda`, así la economía calibrada no cambia.
+
 ### Toda salida de escena pasa por `irA()`
 
 `irA(scene, key, data)` hace el fundido y recién después `scene.start`. Usa la bandera
@@ -213,11 +223,14 @@ Para no volver a discutirlas:
   moneda; audio sintetizado; fundidos entre escenas; celebración con confeti; manito guía en los 3
   primeros niveles; elección de personaje en el primer login; marca de agua ✦ borrada de los fondos.
 
+- **Recorrido guiado de la primera vez** (perfiles nuevos): fantasma que camina al banco, demostración
+  automática del nivel 1, niveles 1-5 sin distracciones, la tienda aparece como premio, regalo de
+  bienvenida (1 mueble gratis de 3) y recién ahí juego libre.
+
 ### Pendiente, por impacto en el niño
 
 | Prioridad | Qué | Nota |
 |---|---|---|
-| 🟡 Media | Onboarding animado antes del nivel 1 | La manito ayuda, pero no muestra la mecánica de "cada parte del cuerpo va en su hueco" |
 | 🟡 Media | Voz opcional | "¡muy bien!", "¡otra vez!": refuerzo sin texto |
 | 🟢 Deuda | Poner al día editor y tester | Ver abajo |
 | 🟢 Pulido | 1 pieza de arte | `pelota` |

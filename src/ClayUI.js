@@ -159,12 +159,21 @@ export const ICONOS = {
     g.fillTriangle(-s * 0.26, -s * 0.38, s * 0.42, 0, -s * 0.26, s * 0.38);
     g.fillCircle(-s * 0.2, -s * 0.3, s * 0.08); g.fillCircle(-s * 0.2, s * 0.3, s * 0.08);
   },
-  tienda(g, s, c, f) {
-    g.lineStyle(s * 0.1, c, 1);
-    g.beginPath(); g.arc(0, -s * 0.12, s * 0.17, Math.PI, 0, false); g.strokePath();
+  tienda(g, s, c, f) {  // bolsa de compras con dos asas (sin agujero: no confundir con un candado)
+    g.lineStyle(s * 0.07, c, 1);
+    g.beginPath(); g.arc(-s * 0.13, -s * 0.16, s * 0.1, Math.PI, 0, false); g.strokePath();
+    g.beginPath(); g.arc(s * 0.13, -s * 0.16, s * 0.1, Math.PI, 0, false); g.strokePath();
     g.fillStyle(c, 1);
-    g.fillRoundedRect(-s * 0.36, -s * 0.14, s * 0.72, s * 0.56, s * 0.1);
-    g.fillStyle(f, 1); g.fillCircle(0, s * 0.12, s * 0.07);
+    g.fillPoints([{ x: -s * 0.34, y: -s * 0.16 }, { x: s * 0.34, y: -s * 0.16 },
+                  { x: s * 0.4, y: s * 0.42 }, { x: -s * 0.4, y: s * 0.42 }], true);
+    g.fillStyle(f, 1);
+    // estrellita en la bolsa: "cosas lindas"
+    const e = [], R = s * 0.12, r = s * 0.05;
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R;
+      e.push({ x: Math.cos(a) * rr, y: s * 0.13 + Math.sin(a) * rr });
+    }
+    g.fillPoints(e, true);
   },
   sonido(g, s, c) {
     g.fillStyle(c, 1);
@@ -200,6 +209,16 @@ export const ICONOS = {
     g.fillStyle(c, 1);
     g.fillRoundedRect(-s * 0.26, -s * 0.4, s * 0.52, s * 0.8, { tl: s * 0.2, tr: s * 0.2, bl: 0, br: 0 });
     g.fillStyle(f, 1); g.fillCircle(s * 0.12, s * 0.04, s * 0.06);
+  },
+  regalo(g, s, c, f) {  // paquetito con moño
+    g.fillStyle(c, 1);
+    g.fillRoundedRect(-s * 0.36, -s * 0.12, s * 0.72, s * 0.5, s * 0.06);
+    g.fillRoundedRect(-s * 0.42, -s * 0.24, s * 0.84, s * 0.16, s * 0.05);
+    g.fillStyle(f, 1);
+    g.fillRect(-s * 0.06, -s * 0.24, s * 0.12, s * 0.62);
+    g.lineStyle(s * 0.08, c, 1);
+    g.strokeEllipse(-s * 0.13, -s * 0.33, s * 0.24, s * 0.16);
+    g.strokeEllipse(s * 0.13, -s * 0.33, s * 0.24, s * 0.16);
   },
   mano(g, s, c) {      // palma abierta = "listo / ok"
     g.fillStyle(c, 1);

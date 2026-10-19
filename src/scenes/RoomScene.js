@@ -4,8 +4,9 @@ import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido       from '../Sonido.js';
 import {
   CLAY, losa, boton, estrella, estiloTexto, botonSonido,
-  irA, entrarEscena, aparecer, cartel,
+  irA, entrarEscena, aparecer, cartel, confeti,
 } from '../ClayUI.js';
+import { PASO, mano, piedritas } from '../Tutorial.js';
 import { LEVELS, packRequerido } from '../levels.js';
 
 export default class RoomScene extends Phaser.Scene {
@@ -41,7 +42,7 @@ export default class RoomScene extends Phaser.Scene {
 
     // ── tienda ──
     const TIENDA_X = this.layout.tienda.x, TIENDA_Y = this.layout.tienda.y;
-    const tdObj = S.colocar(this, 'cuarto', 'tienda', TIENDA_X, TIENDA_Y,
+    const tdObj = this.tdObj = S.colocar(this, 'cuarto', 'tienda', TIENDA_X, TIENDA_Y,
       () => this._dibujarTiendaPlaceholder(TIENDA_X, TIENDA_Y));
     this.burbujaTD = this._crearBurbuja(TIENDA_X, TIENDA_Y - 92, 'tienda', CLAY.naranja, () => irA(this, 'StoreScene'));
     this.editables.push({ nombre: 'tienda', x: TIENDA_X, y: TIENDA_Y, objs: [tdObj, this.burbujaTD].filter(Boolean) });
@@ -78,6 +79,9 @@ export default class RoomScene extends Phaser.Scene {
 
     // ── bienvenida ──
     if (!this.editMode) this._mostrarBienvenida(width, height);
+
+    // ── recorrido guiado de la primera vez ──
+    this._aplicarTutorial();
 
     // ── editor visual ──
     if (this.editMode) this._iniciarEditor();
@@ -338,6 +342,7 @@ export default class RoomScene extends Phaser.Scene {
 
   // ── muebles: comprados (normal) o todos (modo edición) ──
   _dibujarMuebles(S) {
+    this.mueblesObjs = {};
     const tipos = this.editMode
       ? Object.keys(SpriteConfig.muebles)   // en el editor se ven todos para acomodarlos
       : GameState.desbloqueos.filter(id => id.startsWith('mueble_')).map(id => id.replace('mueble_', ''));
@@ -347,6 +352,7 @@ export default class RoomScene extends Phaser.Scene {
       if (!pos) return;
       const obj = S.colocar(this, 'muebles', tipo, pos.x, pos.y,
         () => this._dibujarMueblePlaceholder(tipo, pos.x, pos.y));
+      this.mueblesObjs[tipo] = obj;
       if (this.editMode && obj) {
         this.editables.push({ nombre: tipo, x: pos.x, y: pos.y, objs: [obj] });
       }
@@ -414,7 +420,7 @@ export default class RoomScene extends Phaser.Scene {
     // energía: niveles que le quedan HOY (incluye la energía comprada)
     frasco(338, 108, img('energia'), GameState.nivelesRestantesHoy(), '#7cc35a', '#2f5a1e');
 
-    boton(this, width - 100, y, { w: 54, fill: CLAY.lila, icono: 'mapa', onTap: () => irA(this, 'LevelSelectScene') }).setDepth(150);
+    this.btnMapa = boton(this, width - 100, y, { w: 54, fill: CLAY.lila, icono: 'mapa', onTap: () => irA(this, 'LevelSelectScene') }).setDepth(150);
     botonSonido(this, width - 40, y, 46, 150);
 
     // cerrar sesión: puertita chica abajo a la izquierda (es para el adulto)
@@ -476,6 +482,128 @@ export default class RoomScene extends Phaser.Scene {
     ]);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Recorrido guiado (sólo la primera vez — ver src/Tutorial.js)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Lo que se oculta mientras dura el tutorial: la tienda (hasta que le toca) y el mapa.
+  _aplicarTutorial() {
+    this.tiendaOculta = false;
+    this.guia = [];             // manito, piedritas, fantasma, teclas: se limpian juntos
+    this._demoActiva = false;
+    if (this.editMode) return;
+
+    const paso = GameState.tutorial;
+    const antesDeTienda = paso === PASO.INICIO || paso === PASO.PUZZLE;
+    if (antesDeTienda) {
+      this.tiendaOculta = true;
+      [this.tdObj, this.burbujaTD].forEach(o => o && o.setVisible(false));
+    }
+    if (paso !== PASO.LISTO && this.btnMapa) this.btnMapa.setVisible(false);
+
+    if (antesDeTienda) this.time.delayedCall(700, () => this._guiarA(this.WORKBENCH_POS, this.burbujaWB, true));
+    else if (paso === PASO.TIENDA) this.time.delayedCall(500, () => this._revelarTienda());
+    else if (paso === PASO.CASA) this.time.delayedCall(500, () => this._festejarRegalo());
+  }
+
+  // Guía hacia un objeto: piedritas desde el chico, un fantasma suyo que camina solo
+  // hasta ahí (en loop), la manito sobre la burbuja y, en escritorio, las teclas latiendo.
+  // Lo animado se apaga en cuanto el chico se mueve; la manito queda hasta que entra.
+  _guiarA(destino, burbuja, conTeclas) {
+    this._limpiarGuia();
+    const desde = { x: this.player.x, y: this.player.y + this.PIES_OFF };
+    const hasta = { x: destino.x, y: Math.max(this.layout.pisoY + 22, destino.y + 10) };
+    this.guia.push(piedritas(this, desde, hasta, CLAY.amarillo, 5));
+    // la burbuja se muestra grande desde el principio: se puede tocar sin caminar
+    this._estadoBurbuja(burbuja, true);
+    this.guia.push(mano(this, burbuja.x, burbuja.y, { depth: 460 }));
+
+    this._demoActiva = true;
+    const pose = SpriteConfig.pose(this.pjNombre, desde.x < hasta.x ? 'der' : 'izq');
+    if (pose && this.textures.exists(pose.key)) {
+      const f = this.add.image(desde.x, desde.y, pose.key).setOrigin(0.5, pose.anclaY)
+        .setScale(SpriteConfig.escalaPose(this.pjNombre, 'der')).setAlpha(0).setDepth(4).setTint(0xfff3d6);
+      this.fantasma = f;
+      const vuelta = () => {
+        if (!this._demoActiva || !f.active) return;
+        f.setPosition(desde.x, desde.y).setAlpha(0.5);
+        const t1 = Math.abs(hasta.x - desde.x) / 160 * 1000, t2 = Math.abs(hasta.y - desde.y) / 160 * 1000;
+        this.tweens.chain({
+          targets: f,
+          tweens: [
+            { x: hasta.x, duration: Math.max(200, t1) },
+            { y: hasta.y, duration: Math.max(150, t2) },
+            { alpha: 0, duration: 400, delay: 300 },
+          ],
+          onComplete: () => this.time.delayedCall(500, vuelta),
+        });
+      };
+      vuelta();
+    }
+
+    if (conTeclas && !window.isMobile) {
+      // cuatro teclas de flecha de plastilina, latiendo, junto al chico
+      const tx = desde.x, ty = desde.y + 70;
+      const teclas = this.add.container(tx, ty).setDepth(140);
+      [['↑', 0, -44], ['←', -44, 0], ['↓', 0, 0], ['→', 44, 0]].forEach(([t, x, y]) => {
+        teclas.add(losa(this, x, y, 40, 40, { fill: CLAY.cremaClaro, r: 9, canto: 5, grosor: 3 }));
+        teclas.add(this.add.text(x, y - 3, t, estiloTexto(20, '#8a5a2a', '#fff6e0', 2)).setOrigin(0.5));
+      });
+      aparecer(this, teclas, 300);
+      this.tweens.add({ targets: teclas, scale: 1.08, duration: 500, yoyo: true, repeat: -1, delay: 700 });
+      this.teclasGuia = teclas;
+    }
+  }
+
+  // el chico ya se movió: fuera fantasma y teclas (las piedritas y la manito quedan)
+  _pararDemo() {
+    this._demoActiva = false;
+    [this.fantasma, this.teclasGuia].forEach(o => {
+      if (o && o.active) this.tweens.add({ targets: o, alpha: 0, duration: 250, onComplete: () => o.destroy() });
+    });
+    this.fantasma = null; this.teclasGuia = null;
+  }
+
+  _limpiarGuia() {
+    this._pararDemo();
+    (this.guia || []).forEach(o => o && o.active && o.destroy());
+    this.guia = [];
+  }
+
+  // Pasó los 5 niveles: la tienda "aparece" en el cuarto como premio.
+  _revelarTienda() {
+    this.tiendaOculta = false;
+    [this.tdObj, this.burbujaTD].forEach(o => {
+      if (!o) return;
+      const esc = o.scaleX;
+      o.setVisible(true).setScale(0);
+      this.tweens.add({ targets: o, scale: esc, duration: 520, ease: 'Back.easeOut' });
+    });
+    Sonido.victoria();
+    confeti(this, this.TIENDA_POS.x, this.TIENDA_POS.y + 20, { cantidad: 60 });
+    this.time.delayedCall(700, () => this._guiarA(this.TIENDA_POS, this.burbujaTD, false));
+  }
+
+  // Volvió de elegir su regalo: el mueble nuevo salta con confeti y se destapa todo.
+  _festejarRegalo() {
+    const obj = this.mueblesObjs[GameState.regaloTutorial];
+    if (obj) {
+      const esc = obj.scaleX;
+      obj.setScale(0);
+      this.tweens.add({ targets: obj, scale: esc, duration: 600, ease: 'Back.easeOut' });
+      confeti(this, obj.x, obj.y, { cantidad: 80 });
+    }
+    Sonido.victoria();
+    GameState.avanzarTutorial(PASO.LISTO);
+    if (this.btnMapa) {
+      this.time.delayedCall(900, () => {
+        this.btnMapa.setVisible(true);
+        aparecer(this, this.btnMapa);
+        Sonido.pop();
+      });
+    }
+  }
+
   update() {
     const speed  = 160;
     const { left, right, up, down } = this.cursors;
@@ -486,6 +614,7 @@ export default class RoomScene extends Phaser.Scene {
     const vy  = up.isDown   ? -speed : down.isDown   ? speed : td ? td.vy * speed : 0;
 
     this.player.setVelocity(vx, vy);
+    if ((vx || vy) && this._demoActiva) this._pararDemo();
     this._aplicarPose(this._direccionDe(vx, vy));
     this._seguirAlCuerpo();
 
@@ -493,18 +622,20 @@ export default class RoomScene extends Phaser.Scene {
     const px = this.player.x, py = this.player.y;
 
     const distWB = Phaser.Math.Distance.Between(px, py, this.WORKBENCH_POS.x, this.WORKBENCH_POS.y);
-    const distTD = Phaser.Math.Distance.Between(px, py, this.TIENDA_POS.x, this.TIENDA_POS.y);
+    const distTD = this.tiendaOculta ? Infinity
+                 : Phaser.Math.Distance.Between(px, py, this.TIENDA_POS.x, this.TIENDA_POS.y);
     // si ambos están en rango, gana el más cercano (no mostrar dos hints a la vez)
     const cercaWB = distWB < this.PROXIMITY_DIST && distWB <= distTD;
     const cercaTD = distTD < this.PROXIMITY_DIST && distTD <  distWB;
 
+    const guiando = this.guia && this.guia.length > 0;
     if (cercaWB !== this.cercaDelWorkbench) {
       this.cercaDelWorkbench = cercaWB;
-      this._estadoBurbuja(this.burbujaWB, cercaWB);
+      if (!guiando) this._estadoBurbuja(this.burbujaWB, cercaWB);
     }
     if (cercaTD !== this.cercaDeTienda) {
       this.cercaDeTienda = cercaTD;
-      this._estadoBurbuja(this.burbujaTD, cercaTD);
+      if (!guiando) this._estadoBurbuja(this.burbujaTD, cercaTD);
     }
 
     // activar con E el objeto cercano

@@ -36,6 +36,13 @@ Si una pantalla necesita que el niño lea para saber qué hacer, esa pantalla es
 
 ## Cómo se juega
 
+### La primera vez
+
+Un perfil nuevo arranca con un **recorrido guiado sin texto**: un fantasma del personaje camina hasta
+el banco de trabajo; el primer nivel se resuelve solo como demostración (la manito aprieta cada
+flecha); el jugador hace los niveles 1 a 5 sin mapa ni tienda; al terminar aparece la tienda en el
+cuarto con un **regalo de bienvenida** (un mueble gratis entre tres) y desde ahí el juego es libre.
+
 ### En el cuarto
 
 | Control | Acción |
@@ -341,6 +348,7 @@ existen para el usuario final: los parámetros se ignoran y el juego arranca en 
 | `?sel` | selector de niveles |
 | `?store` | tienda |
 | `?room` | cuarto (sin editor) |
+| `?nuevo` | perfil nuevo "Prueba": recorrido guiado desde cero |
 | `?editroom` | editor del cuarto — arrastrar objetos, `[E]` exportar, `[R]` reset |
 | `?editstore` | editor de la tienda |
 
@@ -376,10 +384,10 @@ consultan vía `src/Dev.js`.
 - [x] Elegir personaje al crear un perfil
 - [x] Transiciones entre pantallas, celebración al ganar, estrellas en vivo
 - [x] Onboarding: manito guía en los primeros niveles
+- [x] Recorrido guiado de la primera vez: demostración, 5 niveles, tienda y regalo de bienvenida
 
 **Pendiente**
 
-- [ ] Onboarding completo: una animación que muestre la mecánica antes del nivel 1
 - [ ] Voz opcional ("¡muy bien!") para reforzar sin texto
 - [ ] Poner al día `editor.html` y `tester.html`
 - [ ] Arte pendiente: `pelota`

@@ -33,6 +33,11 @@ const GameState = {
   // ── nivel activo ──
   nivelActual: 0,
 
+  // ── recorrido guiado de la primera vez (ver src/Tutorial.js) ──
+  // 'inicio' | 'puzzle' | 'tienda' | 'casa' | 'listo'
+  tutorial: 'listo',
+  regaloTutorial: null,     // mueble que eligió de regalo (para festejarlo al volver al cuarto)
+
   // ── login ──
   login(nombre) {
     this.username = nombre.trim();
@@ -43,6 +48,25 @@ const GameState = {
 
   estaLogueado() {
     return !!this.username;
+  },
+
+  enTutorial() {
+    return this.tutorial !== 'listo';
+  },
+
+  avanzarTutorial(paso) {
+    this.tutorial = paso;
+    this._guardar();
+  },
+
+  // El regalo de bienvenida del tutorial: un mueble gratis. Fuera del tutorial no hace nada.
+  regalarMueble(item) {
+    if (this.tutorial !== 'tienda' || !item || item.tipo !== 'mueble') return false;
+    if (!this.tieneDesbloqueo(item.id)) this.desbloqueos.push(item.id);
+    this.regaloTutorial = item.mueble;
+    this.tutorial = 'casa';
+    this._guardar();
+    return true;
   },
 
   // la primera vez que entra un perfil, el chico elige con quién juega (LoginScene)
@@ -219,6 +243,8 @@ const GameState = {
       ultimoNivelDesbloqueado: this.ultimoNivelDesbloqueado,
       fechaHoy:               this.fechaHoy,
       nivelesHoy:             this.nivelesHoy,
+      tutorial:               this.tutorial,
+      regaloTutorial:         this.regaloTutorial,
     };
     localStorage.setItem(this._clave(), JSON.stringify(data));
   },
@@ -230,6 +256,7 @@ const GameState = {
       personaje: 'nino', puntosTotal: 0, mejorPuntaje: {}, estrellas: {}, tiempos: {},
       monedas: 0, desbloqueos: [], energiaExtraHoy: 0, pistas: 3,
       nivelesCompletados: [], ultimoNivelDesbloqueado: 0, fechaHoy: null, nivelesHoy: 0,
+      tutorial: 'inicio', regaloTutorial: null,   // perfil nuevo → recorrido guiado
     });
     const raw = localStorage.getItem(this._clave());
     if (!raw) return;
@@ -255,6 +282,9 @@ const GameState = {
       this.ultimoNivelDesbloqueado = data.ultimoNivelDesbloqueado || 0;
       this.fechaHoy                = data.fechaHoy                || null;
       this.nivelesHoy              = data.nivelesHoy              || 0;
+      // Perfiles anteriores al tutorial: si ya jugaron, no se lo mostramos.
+      this.tutorial                = data.tutorial ?? (this.nivelesCompletados.length > 0 ? 'listo' : 'inicio');
+      this.regaloTutorial          = data.regaloTutorial          || null;
     } catch(e) { /* perfil nuevo */ }
   },
 

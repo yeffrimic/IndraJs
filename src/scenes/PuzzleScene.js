@@ -2,6 +2,7 @@ import GameState    from '../state/GameState.js';
 import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido       from '../Sonido.js';
 import { LEVELS, packRequerido } from '../levels.js';
+import { PASO, NIVELES_TUTORIAL, mano } from '../Tutorial.js';
 import {
   CLAY, losa, boton, insignia, botonSonido, estrella, estiloTexto, hex, oscurecer, aclarar,
   entrarEscena, irA, confeti, chispas, asegurarTexturas, aparecer, respirar, sacudir, COLORES_FIESTA,
@@ -22,6 +23,7 @@ export default class PuzzleScene extends Phaser.Scene {
 
   init(data) {
     this.nivelIdx = data.nivelIdx || 0;
+    this.demoVisto = !!data.demoVisto;   // el nivel 1 del tutorial se demuestra una sola vez
   }
 
   create() {
@@ -161,6 +163,18 @@ export default class PuzzleScene extends Phaser.Scene {
 
     this._dibujarGrid();
     this._actualizarEnergia();
+
+    // ── recorrido guiado (ver src/Tutorial.js) ──
+    // Niveles 1 a 5 de un perfil nuevo: sin mapa, y el nivel 1 empieza con una
+    // demostración en la que el juego se resuelve solo.
+    if (GameState.tutorial === PASO.INICIO) GameState.avanzarTutorial(PASO.PUZZLE);
+    this.enTutorial = GameState.tutorial === PASO.PUZZLE;
+    this.finTutorialPuzzle = false;
+    this.enDemo = false;
+    this.manoDemo = null;
+    if (this.enTutorial && this.btnMapa) this.btnMapa.setVisible(false);
+    if (this.enTutorial && this.nivelIdx === 0 && !this.demoVisto &&
+        !GameState.nivelesCompletados.includes(0)) this._reproducirDemo();
 
     // (la instancia de la escena se reutiliza: no arrastrar el timer del intento anterior)
     this.manito = null;
@@ -493,7 +507,7 @@ export default class PuzzleScene extends Phaser.Scene {
   _crearHUD(ctrlX) {
     const y = 38;
     boton(this, 40, y, { w: 54, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }).setDepth(Z.hud);
-    boton(this, 102, y, { w: 54, fill: CLAY.lila, icono: 'mapa',
+    this.btnMapa = boton(this, 102, y, { w: 54, fill: CLAY.lila, icono: 'mapa',
       onTap: () => irA(this, 'LevelSelectScene', { desde: this.nivelIdx }) }).setDepth(Z.hud);
 
     // número de nivel + estrellas en vivo, centrados sobre el tablero
@@ -1017,8 +1031,9 @@ export default class PuzzleScene extends Phaser.Scene {
     else { this._dibujarGrid(); this._actualizarEnergia(); }
   }
 
-  _mover(dc, dr) {
+  _mover(dc, dr, desdeDemo = false) {
     if (this.solved || this._saliendo) return;
+    if (this.enDemo && !desdeDemo) return;      // durante la demostración se mira, no se toca
     const head = this.snake[0];
     const nc   = head.c + dc, nr = head.r + dr;
     if (nc < 0 || nc >= this.COLS || nr < 0 || nr >= this.ROWS) { this._chocar(dc, dr); return; }
@@ -1047,6 +1062,7 @@ export default class PuzzleScene extends Phaser.Scene {
     this._actualizarEstrellasHUD();
 
     const hasSwitches = this.COMPONENTS.some(c => c.sym === 's');
+    if (this.connected && this.enDemo) { this._finDemo(); return; }
     if (this.connected && !hasSwitches) this._ganar();
     else {
       this._dibujarGrid();
@@ -1092,7 +1108,83 @@ export default class PuzzleScene extends Phaser.Scene {
   }
 
   _reiniciar() {
-    irA(this, 'PuzzleScene', { nivelIdx: this.nivelIdx });
+    // reiniciar durante la demo = "ya entendí": se salta la demostración
+    irA(this, 'PuzzleScene', { nivelIdx: this.nivelIdx, demoVisto: this.demoVisto || this.enDemo });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Demostración del nivel 1 (tutorial)
+  // ─────────────────────────────────────────────────────────────────────────
+  // El juego se resuelve solo siguiendo la ruta: la manito va a cada flecha y la
+  // aprieta, la serpiente avanza por las piedritas, las piezas se encienden y se
+  // prende el LED. Después un ▶ grande: "ahora tú". Así se entiende la mecánica
+  // entera mirando, antes de tocar nada.
+  _reproducirDemo() {
+    this.enDemo = true;
+    if (!this.ruta) { this.enDemo = false; return; }
+    const pasos = this.ruta.slice(1);
+    // ojos que miran: "esto es para mirar"
+    const ojos = this.add.text(this.flechas['0,-1'].x, 112, '👀', { fontSize: '44px' }).setOrigin(0.5).setDepth(Z.manito);
+    this.tweens.add({ targets: ojos, scale: 1.15, duration: 500, yoyo: true, repeat: -1 });
+    this.demoObjs = [ojos];
+
+    let i = 0;
+    const paso = () => {
+      if (!this.scene.isActive() || !this.enDemo || i >= pasos.length) return;
+      const h = this.snake[0], q = pasos[i++];
+      const dc = q.c - h.c, dr = q.r - h.r;
+      const f = this.flechas[`${dc},${dr}`];
+      if (!f) return;
+      if (!this.manoDemo) this.manoDemo = mano(this, f.x, f.y, { depth: Z.manito });
+      else this.manoDemo.irA(f.x, f.y, 200);
+      this.time.delayedCall(260, () => {
+        if (!this.scene.isActive() || !this.enDemo) return;
+        this.manoDemo.apretar();
+        this.tweens.killTweensOf(f);
+        f.setScale(1.1, 0.84);
+        this.tweens.add({ targets: f, scaleX: 1, scaleY: 1, duration: 220, ease: 'Back.easeOut' });
+        this._mover(dc, dr, true);
+        this.time.delayedCall(380, paso);
+      });
+    };
+    this.time.delayedCall(1200, paso);
+  }
+
+  _finDemo() {
+    this.solved = true;
+    if (this.manoDemo) { this.manoDemo.destroy(); this.manoDemo = null; }
+    if (this.caminoGfx) this.caminoGfx.clear();
+    if (this.energyEmitter) this.energyEmitter.emitting = false;
+    this._dibujarGrid();
+    this._actualizarBandeja();
+    this._celebrar();
+    this._encenderLed();
+    Sonido.victoria();
+
+    // "¡ahora tú!": un ▶ grande en el centro del tablero
+    this.time.delayedCall(1400, () => {
+      if (!this.scene.isActive()) return;
+      (this.demoObjs || []).forEach(o => o.destroy());
+      const { width, height } = this.scale;
+      const velo = this.add.rectangle(0, 0, width, height, 0x1a0e06, 0.35).setOrigin(0).setDepth(Z.panel).setInteractive();
+      velo.setAlpha(0);
+      this.tweens.add({ targets: velo, alpha: 1, duration: 250 });
+      const cx = this.originX + this.gridW / 2, cy = this.originY + this.gridH / 2;
+      const b = boton(this, cx, cy, { w: 170, h: 120, r: 44, fill: CLAY.verde, icono: 'play', tamIcono: 64, sonido: 'pop',
+        onTap: () => irA(this, 'PuzzleScene', { nivelIdx: this.nivelIdx, demoVisto: true }) }).setDepth(Z.panel + 1);
+      aparecer(this, b);
+      this.time.delayedCall(450, () => { if (b.active) respirar(this, b, 0.07, 520); });
+      mano(this, cx, cy + 10, { depth: Z.manito });
+    });
+  }
+
+  // el LED se enciende de verdad: un sol rojo-anaranjado que crece
+  _encenderLed() {
+    const led = this.COMPONENTS[this.COMPONENTS.length - 1];
+    if (!led) return;
+    const p = this._celdaCentro(led.c, led.r);
+    const luz = this.add.circle(p.x, p.y, this.TILE * 0.6, 0xff6a3c, 0.6).setDepth(Z.aura).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: luz, scale: { from: 0.4, to: 2.2 }, alpha: { from: 0.9, to: 0.25 }, duration: 700, ease: 'Quad.easeOut' });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1101,7 +1193,7 @@ export default class PuzzleScene extends Phaser.Scene {
   // Si el chico se queda quieto en los primeros niveles, aparece una mano que
   // señala la flecha que conviene tocar, siguiendo la ruta de piedritas.
   _programarManito(espera = 3200) {
-    if (this.nivelIdx >= this.NIVELES_CON_MANITO || this.solved) return;
+    if (this.nivelIdx >= this.NIVELES_CON_MANITO || this.solved || this.enDemo) return;
     if (this._timerManito) this._timerManito.remove();
     this._timerManito = this.time.delayedCall(espera, () => this._mostrarManito());
   }
@@ -1151,19 +1243,17 @@ export default class PuzzleScene extends Phaser.Scene {
     const premio     = GameState.completarNivel(this.nivelIdx, puntos, estrellas);  // 0 si no mejoró
     const monedas    = premio.monedas;
     const mejorEstr  = GameState.registrarEstrellas(this.nivelIdx, estrellas);
+    if (this.enTutorial && GameState.nivelesCompletados.length >= NIVELES_TUTORIAL) {
+      GameState.avanzarTutorial(PASO.TIENDA);
+      this.finTutorialPuzzle = true;
+    }
 
     this._dibujarGrid();
     this._actualizarBandeja();
     this._celebrar();
     Sonido.victoria();
 
-    // el LED se enciende de verdad: un sol rojo-anaranjado que crece
-    const led = this.COMPONENTS[this.COMPONENTS.length - 1];
-    if (led) {
-      const p = this._celdaCentro(led.c, led.r);
-      const luz = this.add.circle(p.x, p.y, this.TILE * 0.6, 0xff6a3c, 0.6).setDepth(Z.aura).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({ targets: luz, scale: { from: 0.4, to: 2.2 }, alpha: { from: 0.9, to: 0.25 }, duration: 700, ease: 'Quad.easeOut' });
-    }
+    this._encenderLed();
     this.time.delayedCall(450, () => { if (this.scene.isActive()) confeti(this, this.CTRL_X / 2, this.scale.height + 10); });
     this.time.delayedCall(850, () => {
       if (this.scene.isActive()) this._panelVictoria(estrellas, monedas, mejorEstr);
@@ -1253,9 +1343,21 @@ export default class PuzzleScene extends Phaser.Scene {
     const sigBloqueado = sigPack && !GameState.tieneDesbloqueo(sigPack);
     const hayMas = siguienteIdx < LEVELS.length && GameState.puedeJugarHoy();
 
-    panel.add(boton(this, -120, yB, { w: 66, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }));
-    panel.add(boton(this, -40, yB, { w: 66, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }));
-    if (hayMas && !sigBloqueado) {
+    // Tutorial: en los niveles 1-4 sólo ↻ y ▶ (con la manito señalando el ▶); al ganar
+    // el 5º, el botón grande es la casita: vuelta al cuarto, donde espera la tienda.
+    if (!this.enTutorial) panel.add(boton(this, -120, yB, { w: 66, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }));
+    panel.add(boton(this, this.enTutorial ? -90 : -40, yB, { w: 66, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }));
+    const guiar = (bx) => this.time.delayedCall(1700, () => {
+      if (this.scene.isActive() && panel.active) mano(this, cx + bx, cy + yB + 6, { depth: Z.manito });
+    });
+    if (this.finTutorialPuzzle) {
+      const casa = boton(this, 90, yB, { w: 132, h: 80, r: 34, fill: CLAY.azul, icono: 'casita', tamIcono: 44, sonido: 'pop',
+        onTap: () => irA(this, 'RoomScene') });
+      panel.add(casa);
+      this.time.delayedCall(1600, () => { if (casa.active) respirar(this, casa, 0.06, 600); });
+      guiar(90);
+    } else if (hayMas && !sigBloqueado) {
+      if (this.enTutorial) guiar(90);
       const sig = boton(this, 90, yB, { w: 132, h: 80, r: 34, fill: CLAY.verde, icono: 'play', tamIcono: 44, sonido: 'pop',
         onTap: () => irA(this, 'PuzzleScene', { nivelIdx: siguienteIdx }) });
       panel.add(sig);

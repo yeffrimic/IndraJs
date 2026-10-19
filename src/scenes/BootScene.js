@@ -57,12 +57,21 @@ export default class BootScene extends Phaser.Scene {
     // ?editstore → entra a la tienda en modo editor
     // ?store     → entra a la tienda normal
     // ?room      → entra al cuarto normal (sin editor)
+    // ?nuevo     → perfil nuevo "Prueba": recorrido guiado desde el principio
     if (Dev.activo()) {
       const params = new URLSearchParams(location.search);
+      // ?nuevo → perfil "Prueba" recién creado: arranca el recorrido guiado desde cero
+      if (params.has('nuevo')) {
+        localStorage.removeItem('circuito_perfil_Prueba');
+        GameState.login('Prueba');
+        this.scene.start('RoomScene');
+        return;
+      }
       if (params.has('nivel') || params.has('sel') || params.has('editroom') ||
           params.has('editstore') || params.has('store') || params.has('room')) {
         GameState.login('Dev');
         GameState.ultimoNivelDesbloqueado = Math.max(GameState.ultimoNivelDesbloqueado, 99);  // todo desbloqueado para testear
+        GameState.tutorial = 'listo';                     // los atajos de dev no pasan por el recorrido guiado
         if (params.has('sel'))            this.scene.start('LevelSelectScene');
         else if (params.has('editroom') || params.has('room')) this.scene.start('RoomScene');
         else if (params.has('editstore') || params.has('store')) this.scene.start('StoreScene');

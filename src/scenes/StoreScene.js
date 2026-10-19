@@ -4,15 +4,21 @@ import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
 import Sonido           from '../Sonido.js';
 import {
   CLAY, losa, boton, icono, estiloTexto, entrarEscena, irA,
-  respirar, sacudir, chispas, cartel, COLORES_FIESTA,
+  respirar, sacudir, chispas, cartel, confeti, aparecer, COLORES_FIESTA,
 } from '../ClayUI.js';
-import { TIENDA_CATS, itemsDe } from '../tienda.js';
+import { TIENDA, TIENDA_CATS, itemsDe } from '../tienda.js';
+import { PASO, REGALOS, mano } from '../Tutorial.js';
 
 export default class StoreScene extends Phaser.Scene {
   constructor() { super('StoreScene'); }
 
   init(data) {
     this.catActiva = (data && data.cat) || TIENDA_CATS[0].id;
+    // Tutorial: la primera visita es para elegir el regalo de bienvenida. Sólo muebles,
+    // sólo los 3 regalos, sin pestañas.
+    this.modoRegalo = GameState.tutorial === PASO.TIENDA;
+    this.regaloElegido = false;
+    if (this.modoRegalo) this.catActiva = 'muebles';
   }
 
   create() {
@@ -40,18 +46,25 @@ export default class StoreScene extends Phaser.Scene {
 
     // ── botón volver ──
     const volver = () => irA(this, 'RoomScene');
-    const vb = boton(this, this.layout.volver.x, this.layout.volver.y, {
+    const vb = this.btnVolver = boton(this, this.layout.volver.x, this.layout.volver.y, {
       w: 58, fill: CLAY.azul, icono: 'casita', onTap: () => { if (!this.editMode) volver(); },
     }).setDepth(20);
     this.editables.push({ nombre: 'volver', x: this.layout.volver.x, y: this.layout.volver.y, objs: [vb] });
 
     // ── pestañas de categoría ──
     this.tabRefs = [];
-    const tabsObjs = this._crearTabs(this.layout.tabs.x, this.layout.tabs.y);
+    const tabsObjs = this.modoRegalo ? [] : this._crearTabs(this.layout.tabs.x, this.layout.tabs.y);
     this.editables.push({ nombre: 'tabs', x: this.layout.tabs.x, y: this.layout.tabs.y, objs: tabsObjs });
 
     this.itemObjects = [];
     this._dibujarItems();
+
+    // la manito señala el regalo del medio
+    this.manoRegalo = null;
+    if (this.modoRegalo && this.regalosPos) {
+      const p = this.regalosPos[1] || this.regalosPos[0];
+      this.time.delayedCall(700, () => { this.manoRegalo = mano(this, p.x, p.y, { depth: 400 }); });
+    }
 
     if (!this.editMode) this.input.keyboard.on('keydown-ESC', volver);
     if (this.editMode) this._iniciarEditorTienda();
@@ -194,9 +207,20 @@ export default class StoreScene extends Phaser.Scene {
     this.itemObjects.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
     this.itemObjects = [];
 
-    const items = itemsDe(this.catActiva);
     const span = this.shelfX1 - this.shelfX0;
     const cxMid = (this.shelfX0 + this.shelfX1) / 2;
+
+    // modo regalo: los 3 regalos solos, grandes, en el estante del medio
+    if (this.modoRegalo) {
+      const regalos = REGALOS.map(id => TIENDA.find(t => t.id === id)).filter(Boolean);
+      const slot = Math.min(200, span / regalos.length);
+      const x0 = cxMid - (slot * regalos.length) / 2 + slot / 2;
+      this.regalosPos = regalos.map((it, j) => ({ x: x0 + j * slot, y: this.shelfY[1] - 60 }));
+      regalos.forEach((it, j) => this._itemEnEstante(it, this.regalosPos[j].x, this.shelfY[1], slot));
+      return;
+    }
+
+    const items = itemsDe(this.catActiva);
 
     // repartir items en los 3 estantes (round-robin) y centrar cada fila
     const estantes = [[], [], []];
@@ -213,6 +237,7 @@ export default class StoreScene extends Phaser.Scene {
 
   _estado(item) {
     const comprado = item.unico && GameState.tieneDesbloqueo(item.id);
+    if (this.modoRegalo && !this.regaloElegido && !comprado && REGALOS.includes(item.id)) return { cls: 'regalo' };
     if (comprado)             return { cls: 'comprado' };
     if (item.proximamente)    return { cls: 'proximamente' };
     if (GameState.monedas < item.precio) return { cls: 'sinSaldo' };
@@ -265,12 +290,16 @@ export default class StoreScene extends Phaser.Scene {
 
     // etiqueta colgando del frente del estante: moneda + precio (o tilde / candado)
     const tagY = shelfTopY + 24;
-    const fill = st.cls === 'comprado' ? CLAY.okFill : st.cls === 'proximamente' ? CLAY.offFill : CLAY.cremaClaro;
+    const fill = st.cls === 'comprado' ? CLAY.okFill : st.cls === 'proximamente' ? CLAY.offFill
+               : st.cls === 'regalo' ? CLAY.amarillo : CLAY.cremaClaro;
     const tagW = Math.min(104, slot - 8);
     const tag = this.add.container(cx, tagY);
     tag.add(losa(this, 0, 0, tagW, 44, { fill, r: 18, canto: 5, grosor: 3 }));
     if (st.cls === 'comprado') {
       tag.add(icono(this, 0, -3, 'check', 28, 0x4a8a34));
+    } else if (st.cls === 'regalo') {
+      // regalo: un paquetito con moño en vez del precio
+      tag.add(icono(this, 0, -4, 'regalo', 32, 0xe8705e, CLAY.amarillo));
     } else if (st.cls === 'proximamente') {
       const lk = SpriteConfig.get('ui', 'candado');
       if (lk && this.textures.exists(lk)) tag.add(this.add.image(0, -3, lk).setDisplaySize(28, 28));
@@ -289,16 +318,34 @@ export default class StoreScene extends Phaser.Scene {
     }).setOrigin(0.5));
 
     // lo comprable respira: "¡esto lo podés llevar!"
-    if (st.cls === 'comprable') respirar(this, dib, 0.04, 800 + Math.random() * 300);
+    if (st.cls === 'comprable' || st.cls === 'regalo') respirar(this, dib, st.cls === 'regalo' ? 0.07 : 0.04, 800 + Math.random() * 300);
 
     // zona clickeable (dibujo + etiqueta)
-    if (st.cls === 'comprable' || st.cls === 'sinSaldo') {
+    if (st.cls === 'comprable' || st.cls === 'sinSaldo' || st.cls === 'regalo') {
       const top = shelfTopY - tam - 8, bot = tagY + 22;
       const zone = this.add.rectangle(cx, (top + bot) / 2, Math.max(110, tam), bot - top, 0xffffff, 0)
         .setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => this._comprar(item, dib, tag));
+      zone.on('pointerdown', () => st.cls === 'regalo' ? this._elegirRegalo(item, dib) : this._comprar(item, dib, tag));
       this.itemObjects.push(zone);
     }
+  }
+
+  // Tutorial: eligió su regalo. Fiesta, y la manito pasa a la casita para volver al cuarto.
+  _elegirRegalo(item, dib) {
+    if (this.editMode || this.regaloElegido || !GameState.regalarMueble(item)) return;
+    this.regaloElegido = true;
+    if (this.manoRegalo) { this.manoRegalo.destroy(); this.manoRegalo = null; }
+    Sonido.victoria();
+    chispas(this, dib.x, dib.y, COLORES_FIESTA, { cantidad: 30, velocidad: 200, depth: 300 });
+    confeti(this, dib.x, dib.y + 40, { cantidad: 70 });
+    this.tweens.add({ targets: dib, scale: 1.35, duration: 260, yoyo: true, ease: 'Quad.easeOut' });
+    this.time.delayedCall(700, () => {
+      if (!this.scene.isActive()) return;
+      this._dibujarItems();
+      const v = this.btnVolver;
+      respirar(this, v, 0.12, 450);
+      mano(this, v.x, v.y, { depth: 400, dx: -6, dy: 44 });
+    });
   }
 
   _comprar(item, dib, tag) {
