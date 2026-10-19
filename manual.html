@@ -278,8 +278,54 @@
     .cadena .eslabon img { width: 58px; height: 58px; }
   }
 
+  /* ── modo libro: una página a la vez, que se da vuelta ── */
+  /* (lo activa el script; sin JS el manual se lee entero hacia abajo, como antes) */
+  .escenario {
+    position: relative; max-width: 860px; margin: 0 auto;
+    perspective: 2400px; transition: height .45s ease;
+  }
+  body.libro .pagina {
+    position: absolute; top: 0; left: 0; right: 0; margin: 0;
+    transform: none; visibility: hidden;
+    transform-origin: left center; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  }
+  body.libro .pagina.visible { visibility: visible; }
+  /* el lomo: sombra a la izquierda, como si estuviera encuadernado */
+  body.libro .pagina::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 34px; pointer-events: none;
+    background: linear-gradient(90deg, rgba(60,35,10,.28), transparent);
+  }
+  .brillo-giro {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 50;
+    background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,.25) 40%, rgba(40,20,5,.45) 100%);
+  }
+  .sombra-debajo {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 50;
+    background: linear-gradient(90deg, rgba(30,15,5,.55) 0%, rgba(30,15,5,.15) 60%, transparent 100%);
+  }
+  .nav-libro {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 100;
+    display: flex; align-items: center; gap: 14px;
+    background: var(--tinta); padding: 8px 12px; border-radius: 40px; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+  }
+  .nav-libro button {
+    width: 54px; height: 54px; border-radius: 50%; border: 4px solid #1a0e06; cursor: pointer;
+    background: var(--naranja); color: #fff; font-family: "Bungee", sans-serif; font-size: 22px;
+    box-shadow: 0 5px 0 #a35a1e; transition: transform .08s;
+  }
+  .nav-libro button:active { transform: translateY(4px); box-shadow: 0 1px 0 #a35a1e; }
+  .nav-libro button:disabled { background: #8a7a58; box-shadow: 0 5px 0 #5a4a30; cursor: default; opacity: .6; }
+  .nav-libro .contador {
+    font-family: "Bungee", sans-serif; color: var(--amarillo); font-size: 16px; min-width: 76px; text-align: center; letter-spacing: 1px;
+  }
+  body.libro { padding-bottom: 110px; }
+
   /* ── para imprimir en el aula ── */
   @media print {
+    .nav-libro, .brillo-giro, .sombra-debajo { display: none !important; }
+    .escenario { height: auto !important; perspective: none; }
+    body.libro .pagina { position: static !important; visibility: visible !important; transform: none !important; }
+    body.libro .pagina::before { display: none; }
     body { background: none; padding: 0; }
     .pagina { box-shadow: none; transform: none !important; margin: 0; page-break-after: always; max-width: none; }
     .pagina.doblada::after { display: none; }
@@ -956,6 +1002,131 @@
       el.innerHTML = palabras.map(glifo).join('<span style="width:8px"></span>');
       el.setAttribute('aria-label', 'texto en idioma de serpiente');
     });
+  })();
+
+  // ── El libro: pasar de página ──
+  // La página de arriba gira sobre su lomo (borde izquierdo) y deja ver la de abajo.
+  // Hacia atrás es lo mismo al revés: la anterior vuelve girando desde el lomo y tapa
+  // a la actual. Se navega con los botones, las flechas, deslizando o con el índice.
+  (function () {
+    const paginas = Array.from(document.querySelectorAll('.pagina'));
+    if (!paginas.length || !('animate' in Element.prototype)) return;   // sin soporte: lectura continua
+
+    const escenario = document.createElement('div');
+    escenario.className = 'escenario';
+    paginas[0].before(escenario);
+    paginas.forEach(p => escenario.appendChild(p));
+    document.body.classList.add('libro');
+
+    const nav = document.createElement('nav');
+    nav.className = 'nav-libro';
+    nav.innerHTML = '<button type="button" aria-label="página anterior">◀</button>' +
+                    '<span class="contador" aria-live="polite"></span>' +
+                    '<button type="button" aria-label="página siguiente">▶</button>';
+    document.body.appendChild(nav);
+    const [btnAnt, contador, btnSig] = [nav.children[0], nav.children[1], nav.children[2]];
+
+    const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const DUR = quieto ? 0 : 750;
+    let actual = 0, girando = false;
+
+    const alto = (...ps) => { escenario.style.height = Math.max(...ps.map(p => p.offsetHeight)) + 'px'; };
+    const mostrar = i => {
+      paginas.forEach((p, k) => { p.classList.toggle('visible', k === i); p.style.zIndex = k === i ? 2 : 0; });
+      alto(paginas[i]);
+      contador.textContent = `${i + 1} / ${paginas.length}`;
+      btnAnt.disabled = i === 0;
+      btnSig.disabled = i === paginas.length - 1;
+    };
+
+    // sonido de papel: un soplido de ruido filtrado, cortito (sin archivos)
+    let ctx = null;
+    const fsst = () => {
+      if (quieto) return;
+      try {
+        ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+        const n = Math.floor(ctx.sampleRate * 0.35), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) { const t = i / n; d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * t) * (1 - t * 0.5); }
+        const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 0.6; g.gain.value = 0.18;
+        src.connect(f); f.connect(g); g.connect(ctx.destination); src.start();
+      } catch (e) { /* sin audio, sin drama */ }
+    };
+
+    const capa = (pagina, clase) => {
+      const c = document.createElement('div');
+      c.className = clase; pagina.appendChild(c);
+      return c;
+    };
+
+    const curva = 'cubic-bezier(.45,.05,.25,1)';
+    const giro = (desde, hasta) => [
+      { transform: `rotateY(${desde}deg)` },
+      { transform: `rotateY(${(desde + hasta) / 2}deg) scaleX(.98)`, offset: .5 },
+      { transform: `rotateY(${hasta}deg)` },
+    ];
+
+    function irA(destino) {
+      destino = Math.max(0, Math.min(paginas.length - 1, destino));
+      if (girando || destino === actual) return;
+      girando = true;
+      const adelante = destino > actual;
+      const de = paginas[actual], a = paginas[destino];
+      // la que gira va arriba; la otra espera abajo
+      const arriba = adelante ? de : a, abajo = adelante ? a : de;
+      arriba.style.zIndex = 3; abajo.style.zIndex = 1;
+      arriba.classList.add('visible'); abajo.classList.add('visible');
+      alto(de, a);
+      fsst();
+
+      const brillo = capa(arriba, 'brillo-giro'), sombra = capa(abajo, 'sombra-debajo');
+      const opts = { duration: DUR, easing: curva, fill: 'forwards' };
+      const anim = arriba.animate(adelante ? giro(0, -180) : giro(-180, 0), opts);
+      brillo.animate([{ opacity: adelante ? 0 : 1 }, { opacity: 1, offset: .5 }, { opacity: adelante ? 1 : 0 }], opts);
+      sombra.animate([{ opacity: adelante ? 1 : 0 }, { opacity: adelante ? 0 : 1 }], opts);
+
+      anim.onfinish = () => {
+        anim.cancel(); brillo.remove(); sombra.remove();
+        actual = destino;
+        mostrar(actual);
+        girando = false;
+        history.replaceState(null, '', paginas[actual].id ? '#' + paginas[actual].id : location.pathname);
+        const top = escenario.getBoundingClientRect().top;
+        if (top < 0) window.scrollBy({ top: top - 16, behavior: quieto ? 'auto' : 'smooth' });
+      };
+    }
+
+    btnAnt.addEventListener('click', () => irA(actual - 1));
+    btnSig.addEventListener('click', () => irA(actual + 1));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); irA(actual + 1); }
+      if (e.key === 'ArrowLeft'  || e.key === 'PageUp')   { e.preventDefault(); irA(actual - 1); }
+    });
+
+    // deslizar con el dedo (sólo gestos claramente horizontales, para no pelear con el scroll)
+    let x0 = null, y0 = null;
+    escenario.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    escenario.addEventListener('touchend', e => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) irA(actual + (dx < 0 ? 1 : -1));
+      x0 = null;
+    });
+
+    // los enlaces del índice (y el "¿dónde está la 21?") abren su página dándola vuelta
+    const paginaDe = id => { const el = id && document.getElementById(id); return el ? paginas.indexOf(el.closest('.pagina')) : -1; };
+    document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
+      const i = paginaDe(a.getAttribute('href').slice(1));
+      if (i >= 0) { e.preventDefault(); irA(i); }
+    }));
+
+    window.addEventListener('resize', () => alto(paginas[actual]));
+    // las imágenes cambian el alto al cargar
+    window.addEventListener('load', () => alto(paginas[actual]));
+
+    const inicial = paginaDe(location.hash.slice(1));
+    actual = inicial >= 0 ? inicial : 0;
+    mostrar(actual);
   })();
 </script>
 </body>
