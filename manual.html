@@ -13,6 +13,11 @@
      Manual de Circuito — librito de instrucciones estilo años 90
      (papel amarillento, capturas con cinta, notas a mano en birome
      azul, y un "idioma de serpiente" que nadie sabe leer todavía).
+
+     MOBILE FIRST: lo de acá arriba es el teléfono parado. Las media
+     queries de más abajo sólo AGREGAN para pantallas más grandes
+     (tableta ≥ 640px, escritorio ≥ 900px) y para el teléfono acostado
+     (poca altura), donde la navegación pasa a los costados.
      ───────────────────────────────────────────────────────────── */
   :root {
     --papel:      #f4e9cf;
@@ -29,9 +34,11 @@
     --lila:       #a77bd0;
     --menta:      #5cc9a0;
     --mesa:       #2a1a0e;
+    --nav-alto:   76px;          /* barra de páginas (teléfono parado) */
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
+  html, body { overflow-x: hidden; }          /* nada se sale a lo ancho en un teléfono */
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   body {
     background: var(--mesa);
     background-image:
@@ -39,208 +46,220 @@
       radial-gradient(ellipse at 80% 100%, #3a2412 0%, transparent 55%);
     color: var(--tinta);
     font-family: "Fredoka", "Trebuchet MS", sans-serif;
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.55;
-    padding: 40px 16px 80px;
+    padding: 12px max(8px, env(safe-area-inset-right)) 40px max(8px, env(safe-area-inset-left));
   }
+  img { max-width: 100%; }
 
   /* ── la página de papel ── */
   .pagina {
     position: relative;
     max-width: 860px;
-    margin: 0 auto 48px;
-    padding: 56px 64px 72px;
+    margin: 0 auto 28px;
+    padding: 44px 18px 56px;
     background-color: var(--papel);
     background-image:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E"),
       radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(150,110,50,.18) 100%);
-    box-shadow: 0 2px 0 #d8c59c, 0 18px 40px rgba(0,0,0,.45), inset 0 0 60px rgba(160,120,60,.15);
+    box-shadow: 0 2px 0 #d8c59c, 0 14px 30px rgba(0,0,0,.45), inset 0 0 50px rgba(160,120,60,.15);
     border-radius: 3px;
+    overflow: hidden;                         /* notas, cintas y fotos giradas no asoman */
   }
-  .pagina:nth-of-type(odd)  { transform: rotate(-.25deg); }
-  .pagina:nth-of-type(even) { transform: rotate(.3deg); }
   /* esquina doblada */
   .pagina.doblada::after {
-    content: ""; position: absolute; right: 0; top: 0; width: 46px; height: 46px;
+    content: ""; position: absolute; right: 0; top: 0; width: 34px; height: 34px;
     background: linear-gradient(225deg, var(--mesa) 50%, var(--papel-osc) 50%);
     box-shadow: -3px 3px 6px rgba(0,0,0,.18);
   }
   .folio {
-    position: absolute; bottom: 22px; font-family: "Bungee", sans-serif; font-size: 14px;
+    position: absolute; bottom: 18px; font-family: "Bungee", sans-serif; font-size: 13px;
     color: var(--tinta-suave); letter-spacing: 1px;
   }
-  .folio.izq { left: 32px; } .folio.der { right: 32px; }
+  .folio.izq { left: 18px; } .folio.der { right: 18px; }
   .cabecera {
-    position: absolute; top: 20px; left: 64px; right: 64px;
-    display: flex; justify-content: space-between;
-    font-family: "Bungee", sans-serif; font-size: 11px; letter-spacing: 2px; color: var(--tinta-suave);
+    position: absolute; top: 16px; left: 18px; right: 44px;
+    display: flex; justify-content: space-between; gap: 10px;
+    font-family: "Bungee", sans-serif; font-size: 10px; letter-spacing: 1.5px; color: var(--tinta-suave);
     border-bottom: 2px solid var(--tinta); padding-bottom: 4px;
+    white-space: nowrap; overflow: hidden;
   }
 
   /* ── tipografía ── */
-  h1, h2, h3 { font-family: "Bungee", sans-serif; font-weight: 400; line-height: 1.1; }
+  h1, h2, h3 { font-family: "Bungee", sans-serif; font-weight: 400; line-height: 1.12; }
   h2 {
-    font-size: 34px; margin: 18px 0 18px; color: var(--tinta);
-    text-shadow: 3px 3px 0 var(--amarillo);
+    font-size: 25px; margin: 14px 0 14px; color: var(--tinta);
+    text-shadow: 2px 2px 0 var(--amarillo);
+    overflow-wrap: anywhere;
   }
-  h3 { font-size: 19px; margin: 26px 0 8px; color: var(--rojo); letter-spacing: .5px; }
+  h3 { font-size: 17px; margin: 22px 0 6px; color: var(--rojo); letter-spacing: .5px; }
   p { margin: 0 0 12px; }
   b, strong { font-weight: 600; }
-  .grande { font-size: 20px; }
+  .grande { font-size: 18px; }
   .chico { font-size: 14px; color: var(--tinta-suave); }
 
-  /* ── notas a mano ── */
+  /* ── notas a mano ── (en el teléfono van en el flujo; flotan recién en pantallas grandes) */
   .nota {
-    font-family: "Caveat", cursive; font-size: 24px; line-height: 1.15; color: var(--birome);
+    font-family: "Caveat", cursive; font-size: 22px; line-height: 1.15; color: var(--birome);
     transform: rotate(-3deg); display: inline-block;
   }
   .nota.lapiz { color: var(--lapiz); }
   .nota.roja  { color: var(--rojo); }
-  .nota-flotante { position: absolute; max-width: 220px; }
+  .nota-flotante { display: block; margin: 8px 0; }
   .subrayado { background: linear-gradient(transparent 62%, rgba(246,201,69,.75) 62%, rgba(246,201,69,.75) 92%, transparent 92%); }
   .tachado { text-decoration: line-through; text-decoration-color: var(--rojo); text-decoration-thickness: 2px; }
 
   /* ── capturas pegadas con cinta ── */
   .foto {
-    position: relative; background: #fff; padding: 10px 10px 14px; margin: 18px auto 26px;
-    box-shadow: 0 6px 16px rgba(60,40,10,.35); max-width: 640px;
+    position: relative; background: #fff; padding: 7px 7px 10px; margin: 18px auto 22px;
+    box-shadow: 0 5px 12px rgba(60,40,10,.35); max-width: 640px;
   }
   .foto img { display: block; width: 100%; height: auto; }
-  .foto .pie { font-family: "Caveat", cursive; font-size: 22px; color: var(--tinta); text-align: center; margin-top: 6px; }
+  .foto .pie { font-family: "Caveat", cursive; font-size: 20px; color: var(--tinta); text-align: center; margin-top: 4px; line-height: 1.1; }
   .foto::before, .foto::after {
-    content: ""; position: absolute; width: 96px; height: 26px; top: -12px;
+    content: ""; position: absolute; width: 70px; height: 20px; top: -9px;
     background: rgba(246, 224, 160, .75); box-shadow: 0 1px 2px rgba(0,0,0,.15);
   }
   .foto::before { left: 12%; transform: rotate(-6deg); }
   .foto::after  { right: 12%; transform: rotate(5deg); }
-  .foto.izq { transform: rotate(-1.4deg); } .foto.der { transform: rotate(1.2deg); }
-  .foto .anotar { position: absolute; inset: 10px 10px 14px; pointer-events: none; }
-  .foto.con-pie .anotar { bottom: 46px; }
+  .foto.izq { transform: rotate(-.8deg); } .foto.der { transform: rotate(.7deg); }
+  .foto .anotar { position: absolute; inset: 7px 7px 10px; pointer-events: none; }
+  .foto.con-pie .anotar { bottom: 36px; }
 
   /* ── recuadros noventeros ── */
   .aviso {
-    border: 4px solid var(--tinta); background: #fff6dc; padding: 16px 20px 14px 76px;
-    position: relative; margin: 20px 0; box-shadow: 6px 6px 0 var(--tinta);
-  }
-  .aviso::before {
-    content: "!"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
-    width: 44px; height: 44px; border-radius: 50%; background: var(--rojo); color: #fff;
-    font-family: "Bungee", sans-serif; font-size: 28px; text-align: center; line-height: 46px;
-    border: 3px solid var(--tinta);
-  }
-  .aviso h4 { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 15px; letter-spacing: 1px; margin-bottom: 4px; }
-  .adulto {
-    border: 2px dashed var(--tinta-suave); padding: 14px 18px; margin: 22px 0; background: rgba(255,255,255,.35);
+    border: 3px solid var(--tinta); background: #fff6dc; padding: 14px 14px 12px 60px;
+    position: relative; margin: 18px 4px 18px 0; box-shadow: 4px 4px 0 var(--tinta);
     font-size: 15px;
   }
-  .adulto h4 { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 13px; letter-spacing: 2px; color: var(--tinta-suave); margin-bottom: 6px; }
+  .aviso::before {
+    content: "!"; position: absolute; left: 12px; top: 16px;
+    width: 36px; height: 36px; border-radius: 50%; background: var(--rojo); color: #fff;
+    font-family: "Bungee", sans-serif; font-size: 22px; text-align: center; line-height: 37px;
+    border: 3px solid var(--tinta);
+  }
+  .aviso h4 { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 13px; letter-spacing: 1px; margin-bottom: 4px; }
+  .adulto {
+    border: 2px dashed var(--tinta-suave); padding: 12px 14px; margin: 20px 0; background: rgba(255,255,255,.35);
+    font-size: 15px;
+  }
+  .adulto h4 { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 12px; letter-spacing: 1.5px; color: var(--tinta-suave); margin-bottom: 6px; }
   .estallido {
-    display: inline-grid; place-items: center; width: 110px; height: 110px;
+    display: inline-grid; place-items: center; width: 104px; height: 104px;
     background: var(--amarillo); color: var(--rojo);
-    font-family: "Bungee", sans-serif; font-size: 15px; text-align: center; line-height: 1.05;
+    font-family: "Bungee", sans-serif; font-size: 13px; text-align: center; line-height: 1.05;
     clip-path: polygon(50% 0%, 61% 15%, 79% 7%, 80% 26%, 98% 30%, 88% 46%, 100% 61%, 82% 69%, 84% 88%, 65% 84%, 50% 100%, 37% 85%, 17% 92%, 16% 72%, 0% 64%, 11% 49%, 2% 32%, 20% 27%, 21% 8%, 39% 15%);
     transform: rotate(12deg);
   }
 
-  /* ── grillas ── */
-  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
-  .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  /* ── grillas: una columna en el teléfono ── */
+  .dos  { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+  .tres { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
   /* ── portada ── */
   .portada {
-    text-align: center; padding-top: 70px; padding-bottom: 90px;
+    text-align: center; padding-top: 44px; padding-bottom: 60px;
     background-color: #f6c945;
     background-image:
       repeating-linear-gradient(135deg, rgba(255,255,255,.12) 0 18px, transparent 18px 36px),
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .12 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
-    border: 10px solid var(--tinta); border-radius: 6px;
+    border: 7px solid var(--tinta); border-radius: 6px;
   }
   .portada .franja {
-    font-family: "Bungee", sans-serif; font-size: 13px; letter-spacing: 4px; background: var(--tinta); color: var(--amarillo);
-    display: inline-block; padding: 6px 18px; margin-bottom: 24px;
+    font-family: "Bungee", sans-serif; font-size: 11px; letter-spacing: 3px; background: var(--tinta); color: var(--amarillo);
+    display: inline-block; padding: 5px 12px; margin-bottom: 18px;
   }
   .portada h1 {
-    font-family: "Bungee Shade", "Bungee", sans-serif; font-size: 86px; color: var(--rojo); letter-spacing: 2px;
-    text-shadow: 5px 5px 0 var(--tinta);
+    font-family: "Bungee Shade", "Bungee", sans-serif; font-size: clamp(40px, 13vw, 86px); color: var(--rojo); letter-spacing: 1px;
+    text-shadow: 4px 4px 0 var(--tinta);
   }
-  .portada .sub { font-family: "Bungee", sans-serif; font-size: 22px; letter-spacing: 6px; margin-top: 6px; }
-  .portada .heroe { position: relative; height: 270px; margin: 30px auto 12px; max-width: 520px; }
-  .portada .heroe img { position: absolute; filter: drop-shadow(6px 8px 0 rgba(59,42,26,.35)); }
+  .portada .sub { font-family: "Bungee", sans-serif; font-size: 18px; letter-spacing: 6px; margin-top: 4px; }
+  /* los héroes: en fila y del tamaño de la pantalla; en escritorio se desparraman */
+  .portada .heroe {
+    display: flex; justify-content: center; align-items: center; gap: 2%;
+    margin: 22px auto 10px; max-width: 520px;
+  }
+  .portada .heroe img { width: 23%; filter: drop-shadow(4px 6px 0 rgba(59,42,26,.35)); }
+  .portada .heroe .h1 { width: 30%; transform: rotate(-8deg); }
+  .portada .heroe .h2 { transform: rotate(10deg) translateY(12px); }
+  .portada .heroe .h3 { width: 26%; transform: rotate(-14deg) translateY(-14px); }
+  .portada .heroe .h4 { transform: rotate(6deg) translateY(10px); }
   .portada .sello {
-    position: absolute; right: 26px; bottom: 26px; width: 120px; height: 120px; border-radius: 50%;
-    border: 4px solid var(--tinta); background: #fff6dc; display: grid; place-items: center;
-    font-family: "Bungee", sans-serif; font-size: 11px; line-height: 1.15; text-align: center; transform: rotate(-14deg);
-    box-shadow: inset 0 0 0 5px #fff6dc, inset 0 0 0 7px var(--tinta);
+    width: 88px; height: 88px; border-radius: 50%; margin: 18px auto 0;
+    border: 3px solid var(--tinta); background: #fff6dc; display: grid; place-items: center;
+    font-family: "Bungee", sans-serif; font-size: 9px; line-height: 1.15; text-align: center; transform: rotate(-14deg);
+    box-shadow: inset 0 0 0 4px #fff6dc, inset 0 0 0 6px var(--tinta);
   }
-  .portada .datos {
-    display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 18px;
-  }
+  .portada .datos { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
   .portada .datos span {
-    font-family: "Bungee", sans-serif; font-size: 12px; border: 3px solid var(--tinta); padding: 5px 12px; background: #fff6dc;
+    font-family: "Bungee", sans-serif; font-size: 11px; border: 2px solid var(--tinta); padding: 4px 9px; background: #fff6dc;
   }
+  .portada .folio { position: static; display: block; margin-top: 14px; }
 
   /* ── índice ── */
-  .indice { list-style: none; margin: 16px 0; }
-  .indice li { display: flex; align-items: baseline; gap: 10px; font-size: 19px; padding: 5px 0; }
-  .indice li .puntos { flex: 1; border-bottom: 3px dotted var(--tinta-suave); transform: translateY(-5px); }
-  .indice li a { color: var(--tinta); text-decoration: none; font-weight: 500; }
-  .indice li a:hover { color: var(--rojo); }
+  .indice { list-style: none; margin: 12px 0; }
+  .indice li { display: flex; align-items: baseline; gap: 8px; font-size: 16px; }
+  .indice li a {
+    color: var(--tinta); text-decoration: none; font-weight: 500;
+    padding: 9px 0; min-height: 44px; display: flex; align-items: center;   /* dedo cómodo */
+  }
+  .indice li a:active, .indice li a:hover { color: var(--rojo); }
+  .indice li .puntos { flex: 1; border-bottom: 3px dotted var(--tinta-suave); transform: translateY(-5px); min-width: 12px; }
   .indice li .num { font-family: "Bungee", sans-serif; }
 
   /* ── controles ── */
   .tecla {
-    display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 10px;
-    border: 3px solid var(--tinta); border-radius: 8px; background: #fffaf0; box-shadow: 0 4px 0 var(--tinta);
-    font-family: "Bungee", sans-serif; font-size: 16px; margin: 0 3px 6px;
+    display: inline-grid; place-items: center; min-width: 34px; height: 34px; padding: 0 6px;
+    border: 3px solid var(--tinta); border-radius: 7px; background: #fffaf0; box-shadow: 0 3px 0 var(--tinta);
+    font-family: "Bungee", sans-serif; font-size: 13px; margin: 0 2px 6px;
   }
-  .flechas img { width: 60px; height: 60px; }
-  .flechas { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 2px; justify-content: center; }
+  .flechas { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); gap: 2px; justify-content: center; }
+  .flechas img { width: 54px; height: 54px; }
 
-  /* ── tabla noventera ── */
-  table.tabla { width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 16px; }
-  .tabla th { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 13px; letter-spacing: 1px; text-align: left; background: var(--tinta); color: var(--papel); padding: 8px 10px; }
-  .tabla td { padding: 8px 10px; border-bottom: 2px solid rgba(59,42,26,.25); vertical-align: middle; }
-  .tabla tr:nth-child(even) td { background: rgba(255,255,255,.3); }
+  /* ── tablas: en el teléfono cada fila es una tarjeta ── */
+  table.tabla { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 15px; }
+  .tabla thead, .tabla tr:first-child:has(th) { display: none; }
+  .tabla tr { display: block; padding: 10px 0; border-bottom: 2px solid rgba(59,42,26,.25); }
+  .tabla td { display: block; padding: 2px 0; }
+  .tabla td:first-child { font-weight: 600; }
   .estrellitas img { width: 22px; height: 22px; vertical-align: -5px; }
-  .ico { width: 26px; height: 26px; vertical-align: -7px; }
+  .ico { width: 24px; height: 24px; vertical-align: -6px; }
 
   /* ── fichas de componente ── */
-  .ficha {
-    display: grid; grid-template-columns: 220px 1fr; gap: 30px; align-items: start; margin-top: 8px;
-  }
+  .ficha { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; margin-top: 8px; }
   .ficha .retrato {
-    background: #fff6dc; border: 4px solid var(--tinta); box-shadow: 6px 6px 0 var(--tinta);
-    padding: 14px; text-align: center; position: relative;
+    background: #fff6dc; border: 3px solid var(--tinta); box-shadow: 5px 5px 0 var(--tinta);
+    padding: 12px; text-align: center; position: relative; max-width: 260px; margin: 12px auto 0;
   }
-  .ficha .retrato img { width: 170px; height: 170px; object-fit: contain; filter: drop-shadow(3px 5px 0 rgba(59,42,26,.25)); }
-  .ficha .retrato .nombre { font-family: "Bungee", sans-serif; font-size: 18px; margin-top: 4px; }
+  .ficha .retrato img { width: 140px; height: 140px; object-fit: contain; filter: drop-shadow(3px 5px 0 rgba(59,42,26,.25)); }
+  .ficha .retrato .nombre { font-family: "Bungee", sans-serif; font-size: 17px; margin-top: 4px; }
   .ficha .retrato .orden {
-    position: absolute; top: -18px; left: -18px; width: 48px; height: 48px; border-radius: 50%;
-    border: 4px solid var(--tinta); display: grid; place-items: center; color: #fff;
-    font-family: "Bungee", sans-serif; font-size: 20px;
+    position: absolute; top: -14px; left: -10px; width: 44px; height: 44px; border-radius: 50%;
+    border: 3px solid var(--tinta); display: grid; place-items: center; color: #fff;
+    font-family: "Bungee", sans-serif; font-size: 18px;
   }
-  .stats { list-style: none; margin-top: 14px; text-align: left; font-size: 14px; }
-  .stats li { display: flex; justify-content: space-between; border-bottom: 1px dashed rgba(59,42,26,.35); padding: 3px 0; }
-  .stats li b { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 11px; letter-spacing: 1px; color: var(--tinta-suave); }
+  .stats { list-style: none; margin-top: 12px; text-align: left; font-size: 13px; }
+  .stats li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed rgba(59,42,26,.35); padding: 3px 0; }
+  .stats li b { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 10px; letter-spacing: 1px; color: var(--tinta-suave); }
   .barra { display: inline-flex; gap: 2px; }
   .barra i { width: 9px; height: 12px; border: 1.5px solid var(--tinta); }
   .barra i.on { background: var(--naranja); }
-  .simbolo { display: block; margin: 8px auto 0; }
-  .vida-real { border-left: 6px solid var(--azul); padding: 4px 0 4px 16px; margin: 14px 0; }
-  .en-juego  { border-left: 6px solid var(--verde); padding: 4px 0 4px 16px; margin: 14px 0; }
-  .etiqueta { font-family: "Bungee", sans-serif; font-size: 12px; letter-spacing: 2px; display: block; color: var(--tinta-suave); }
+  .simbolo { display: block; margin: 8px auto 0; max-width: 100%; }
+  .vida-real { border-left: 5px solid var(--azul); padding: 4px 0 4px 12px; margin: 12px 0; }
+  .en-juego  { border-left: 5px solid var(--verde); padding: 4px 0 4px 12px; margin: 12px 0; }
+  .etiqueta { font-family: "Bungee", sans-serif; font-size: 11px; letter-spacing: 1.5px; display: block; color: var(--tinta-suave); }
 
   /* ── orden / cadena ── */
-  .cadena { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 18px 0; }
-  .cadena .eslabon { text-align: center; width: 100px; }
-  .cadena .eslabon img { width: 74px; height: 74px; object-fit: contain; background: #fff6dc; border: 3px solid var(--tinta); border-radius: 50%; padding: 6px; }
-  .cadena .eslabon span { display: block; font-family: "Bungee", sans-serif; font-size: 11px; margin-top: 4px; }
-  .cadena .flecha { font-family: "Bungee", sans-serif; font-size: 26px; color: var(--rojo); }
+  .cadena { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; margin: 16px 0; }
+  .cadena .eslabon { text-align: center; width: 64px; }
+  .cadena .eslabon img { width: 54px; height: 54px; object-fit: contain; background: #fff6dc; border: 3px solid var(--tinta); border-radius: 50%; padding: 5px; }
+  .cadena .eslabon span { display: block; font-family: "Bungee", sans-serif; font-size: 8px; margin-top: 3px; }
+  .cadena .flecha { font-family: "Bungee", sans-serif; font-size: 18px; color: var(--rojo); }
 
   /* ── idioma de serpiente (glifos) ── */
   .glifos { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 3px; vertical-align: middle; }
-  .glifos svg { width: 22px; height: 30px; }
-  .glifos.grandes svg { width: 34px; height: 46px; }
+  .glifos svg { width: 20px; height: 28px; }
+  .glifos.grandes svg { width: 28px; height: 38px; }
   .glifos path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
   .glifos circle { fill: none; stroke: currentColor; stroke-width: 2; }
 
@@ -254,36 +273,14 @@
   .contra .folio { color: var(--papel-osc); }
 
   a.jugar {
-    display: inline-block; margin-top: 18px; font-family: "Bungee", sans-serif; font-size: 20px; color: #fff; text-decoration: none;
-    background: var(--verde); border: 4px solid var(--tinta); border-radius: 14px; padding: 12px 26px; box-shadow: 0 6px 0 var(--tinta);
+    display: inline-block; margin-top: 18px; font-family: "Bungee", sans-serif; font-size: 18px; color: #fff; text-decoration: none;
+    background: var(--verde); border: 4px solid var(--tinta); border-radius: 14px; padding: 12px 24px; box-shadow: 0 6px 0 var(--tinta);
   }
   a.jugar:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--tinta); }
 
-  /* ── teléfono ── */
-  @media (max-width: 720px) {
-    body { padding: 20px 10px 60px; font-size: 16px; }
-    .pagina { padding: 46px 20px 64px; }
-    .cabecera { left: 20px; right: 20px; }
-    .portada h1 { font-size: 46px; }
-    .portada .heroe { height: 190px; }
-    .portada .heroe img { transform: scale(.72); transform-origin: top center; }
-    .portada .sello { width: 92px; height: 92px; font-size: 9px; right: 10px; bottom: 10px; }
-    h2 { font-size: 26px; }
-    .dos, .tres { grid-template-columns: 1fr; }
-    .ficha { grid-template-columns: 1fr; }
-    .ficha .retrato { max-width: 260px; margin: 0 auto; }
-    .nota-flotante { position: static; display: block; margin: 8px 0; max-width: none; }
-    .tabla { font-size: 14px; }
-    .cadena .eslabon { width: 76px; }
-    .cadena .eslabon img { width: 58px; height: 58px; }
-  }
-
   /* ── modo libro: una página a la vez, que se da vuelta ── */
-  /* (lo activa el script; sin JS el manual se lee entero hacia abajo, como antes) */
-  .escenario {
-    position: relative; max-width: 860px; margin: 0 auto;
-    perspective: 2400px; transition: height .45s ease;
-  }
+  /* (lo activa el script; sin JS el manual se lee entero hacia abajo) */
+  .escenario { position: relative; max-width: 860px; margin: 0 auto; perspective: 1800px; transition: height .45s ease; }
   body.libro .pagina {
     position: absolute; top: 0; left: 0; right: 0; margin: 0;
     transform: none; visibility: hidden;
@@ -292,7 +289,7 @@
   body.libro .pagina.visible { visibility: visible; }
   /* el lomo: sombra a la izquierda, como si estuviera encuadernado */
   body.libro .pagina::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 34px; pointer-events: none;
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 22px; pointer-events: none;
     background: linear-gradient(90deg, rgba(60,35,10,.28), transparent);
   }
   .brillo-giro {
@@ -303,22 +300,126 @@
     position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 50;
     background: linear-gradient(90deg, rgba(30,15,5,.55) 0%, rgba(30,15,5,.15) 60%, transparent 100%);
   }
+
+  /* navegación — teléfono parado: barra fija abajo, a todo el ancho, que RESERVA su lugar
+     (el body deja ese espacio libre, así nunca tapa el final de la página) */
   .nav-libro {
-    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 100;
-    display: flex; align-items: center; gap: 14px;
-    background: var(--tinta); padding: 8px 12px; border-radius: 40px; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+    height: calc(var(--nav-alto) + env(safe-area-inset-bottom));
+    padding: 10px 16px env(safe-area-inset-bottom);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--tinta); box-shadow: 0 -4px 14px rgba(0,0,0,.4);
   }
   .nav-libro button {
-    width: 54px; height: 54px; border-radius: 50%; border: 4px solid #1a0e06; cursor: pointer;
+    width: 56px; height: 56px; border-radius: 50%; border: 4px solid #1a0e06; cursor: pointer; flex: none;
     background: var(--naranja); color: #fff; font-family: "Bungee", sans-serif; font-size: 22px;
     box-shadow: 0 5px 0 #a35a1e; transition: transform .08s;
+    touch-action: manipulation;
   }
   .nav-libro button:active { transform: translateY(4px); box-shadow: 0 1px 0 #a35a1e; }
-  .nav-libro button:disabled { background: #8a7a58; box-shadow: 0 5px 0 #5a4a30; cursor: default; opacity: .6; }
+  .nav-libro button:disabled { background: #8a7a58; box-shadow: 0 5px 0 #5a4a30; cursor: default; opacity: .5; }
   .nav-libro .contador {
-    font-family: "Bungee", sans-serif; color: var(--amarillo); font-size: 16px; min-width: 76px; text-align: center; letter-spacing: 1px;
+    font-family: "Bungee", sans-serif; color: var(--amarillo); font-size: 16px; text-align: center; letter-spacing: 1px; flex: 1;
   }
-  body.libro { padding-bottom: 110px; }
+  body.libro { padding-bottom: calc(var(--nav-alto) + env(safe-area-inset-bottom) + 16px); }
+
+  /* ── tableta (≥ 640px) ── */
+  @media (min-width: 640px) {
+    body { font-size: 17px; padding: 28px 16px 60px; }
+    .pagina { padding: 52px 40px 66px; margin-bottom: 40px; }
+    .cabecera { left: 40px; right: 60px; font-size: 11px; letter-spacing: 2px; }
+    .folio.izq { left: 28px; } .folio.der { right: 28px; }
+    h2 { font-size: 32px; text-shadow: 3px 3px 0 var(--amarillo); }
+    h3 { font-size: 19px; }
+    .grande { font-size: 20px; }
+    .nota { font-size: 24px; }
+    .dos { grid-template-columns: 1fr 1fr; gap: 28px; }
+    .tres { grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .ficha { grid-template-columns: 220px 1fr; gap: 30px; }
+    .ficha .retrato { margin: 0; }
+    .ficha .retrato img { width: 170px; height: 170px; }
+    .cadena .eslabon { width: 96px; }
+    .cadena .eslabon img { width: 74px; height: 74px; }
+    .cadena .eslabon span { font-size: 10px; }
+    .cadena .flecha { font-size: 26px; }
+    .flechas { grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); }
+    .flechas img { width: 60px; height: 60px; }
+    .tecla { min-width: 44px; height: 44px; font-size: 16px; }
+    /* tablas con columnas de verdad */
+    .tabla thead, .tabla tr:first-child:has(th) { display: table-row; }
+    .tabla tr { display: table-row; padding: 0; }
+    .tabla td, .tabla th { display: table-cell; }
+    .tabla td { padding: 8px 10px; border-bottom: 2px solid rgba(59,42,26,.25); vertical-align: middle; }
+    .tabla td:first-child { font-weight: 400; }
+    .tabla th { font-family: "Bungee", sans-serif; font-weight: 400; font-size: 13px; letter-spacing: 1px; text-align: left; background: var(--tinta); color: var(--papel); padding: 8px 10px; }
+    .tabla tr:nth-child(even) td { background: rgba(255,255,255,.3); }
+    .foto { padding: 10px 10px 14px; }
+    .foto::before, .foto::after { width: 96px; height: 26px; top: -12px; }
+    .foto .anotar { inset: 10px 10px 14px; }
+    .foto.con-pie .anotar { bottom: 46px; }
+    .foto .pie { font-size: 22px; }
+    .aviso { padding: 16px 20px 14px 76px; box-shadow: 6px 6px 0 var(--tinta); border-width: 4px; font-size: 16px; }
+    .aviso::before { left: 16px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; font-size: 28px; line-height: 46px; }
+    .indice li { font-size: 19px; }
+    .glifos svg { width: 22px; height: 30px; }
+    .glifos.grandes svg { width: 34px; height: 46px; }
+    .portada { padding-top: 70px; padding-bottom: 90px; border-width: 10px; }
+    .portada .franja { font-size: 13px; letter-spacing: 4px; }
+    .portada .sub { font-size: 22px; }
+    .portada .datos span { font-size: 12px; border-width: 3px; }
+    .pagina.doblada::after { width: 46px; height: 46px; }
+  }
+
+  /* ── escritorio (≥ 900px): las notas flotan en los márgenes y las hojas se tuercen ── */
+  @media (min-width: 900px) {
+    .pagina { padding: 56px 64px 72px; }
+    .cabecera { left: 64px; right: 64px; }
+    .folio.izq { left: 32px; } .folio.der { right: 32px; }
+    .pagina:nth-of-type(odd)  { transform: rotate(-.25deg); }
+    .pagina:nth-of-type(even) { transform: rotate(.3deg); }
+    h2 { font-size: 34px; }
+    .nota-flotante { position: absolute; max-width: 220px; margin: 0; }
+    .foto.izq { transform: rotate(-1.4deg); } .foto.der { transform: rotate(1.2deg); }
+    .portada .heroe { position: relative; display: block; height: 270px; margin: 30px auto 12px; }
+    .portada .heroe img { position: absolute; width: auto; transform: none; }
+    .portada .heroe .h1 { width: 190px; left: 4%;  top: 40px;  transform: rotate(-8deg); }
+    .portada .heroe .h2 { width: 150px; left: 36%; top: 96px;  transform: rotate(10deg); }
+    .portada .heroe .h3 { width: 170px; left: 52%; top: 10px;  transform: rotate(-14deg); }
+    .portada .heroe .h4 { width: 150px; right: 2%; top: 110px; transform: rotate(6deg); }
+    .portada .sello {
+      position: absolute; right: 26px; bottom: 26px; margin: 0; width: 120px; height: 120px; font-size: 11px;
+      border-width: 4px; box-shadow: inset 0 0 0 5px #fff6dc, inset 0 0 0 7px var(--tinta);
+    }
+    .portada .folio { position: absolute; margin: 0; }
+    /* escritorio: la barra vuelve a ser una pastilla flotante, más chica */
+    .nav-libro {
+      left: 50%; right: auto; bottom: 16px; transform: translateX(-50%); height: auto;
+      padding: 8px 12px; border-radius: 40px; gap: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+    }
+    .nav-libro .contador { min-width: 76px; flex: none; }
+    body.libro { padding-bottom: 110px; }
+  }
+
+  /* ── teléfono acostado (poca altura): la navegación pasa a los costados ──
+     dos botones fijos, a media altura, en los márgenes; el contador arriba a la derecha.
+     Así la página usa todo el alto y nada la tapa. */
+  @media (orientation: landscape) and (max-height: 540px) {
+    .nav-libro {
+      top: 0; bottom: 0; left: 0; right: 0; height: auto; padding: 0; transform: none; border-radius: 0;
+      background: none; box-shadow: none; pointer-events: none;
+    }
+    .nav-libro button {
+      position: fixed; top: 50%; transform: translateY(-50%); pointer-events: auto; opacity: .92;
+    }
+    .nav-libro button:first-of-type { left: max(8px, env(safe-area-inset-left)); }
+    .nav-libro button:last-of-type  { right: max(8px, env(safe-area-inset-right)); }
+    .nav-libro button:active { transform: translateY(calc(-50% + 4px)); }
+    .nav-libro .contador {
+      position: fixed; top: 8px; right: max(10px, env(safe-area-inset-right)); flex: none;
+      background: var(--tinta); padding: 4px 10px; border-radius: 12px; font-size: 13px; pointer-events: none;
+    }
+    body.libro { padding: 12px calc(76px + env(safe-area-inset-right)) 24px calc(76px + env(safe-area-inset-left)); }
+  }
 
   /* ── para imprimir en el aula ── */
   @media print {
@@ -341,10 +442,10 @@
   <h1>CIRCUITO</h1>
   <div class="sub">PUZZLE</div>
   <div class="heroe">
-    <img src="assets/snake_head.png"  alt="" style="width:190px; left:4%;  top:40px; transform:rotate(-8deg)">
-    <img src="assets/comp_bat.png"    alt="" style="width:150px; left:36%; top:96px; transform:rotate(10deg)">
-    <img src="assets/comp_r.png"      alt="" style="width:170px; left:52%; top:10px; transform:rotate(-14deg)">
-    <img src="assets/comp_led.png"    alt="" style="width:150px; right:2%; top:110px; transform:rotate(6deg)">
+    <img class="h1" src="assets/snake_head.png" alt="">
+    <img class="h2" src="assets/comp_bat.png"   alt="">
+    <img class="h3" src="assets/comp_r.png"     alt="">
+    <img class="h4" src="assets/comp_led.png"   alt="">
   </div>
   <p class="glifos grandes" data-texto="la luz sigue al que sigue el camino" style="color:var(--tinta)"></p>
   <div class="datos">
@@ -578,11 +679,11 @@
   <p class="grande">Un <b>componente</b> es cada pieza de un circuito. En Circuito hay cinco.
   Todos son de verdad: los vas a encontrar dentro de juguetes, linternas y computadoras.</p>
   <div class="tres" style="margin-top:20px; text-align:center">
-    <div><img src="assets/comp_bat.png" alt="" style="width:120px"><br><b>Batería</b><br><span class="chico">da la energía</span></div>
-    <div><img src="assets/comp_r.png"   alt="" style="width:120px"><br><b>Resistencia</b><br><span class="chico">frena la corriente</span></div>
-    <div><img src="assets/comp_sw.png"  alt="" style="width:120px"><br><b>Interruptor</b><br><span class="chico">abre y cierra el paso</span></div>
-    <div><img src="assets/comp_c.png"   alt="" style="width:120px"><br><b>Capacitor</b><br><span class="chico">guarda un poquito de energía</span></div>
-    <div><img src="assets/comp_led.png" alt="" style="width:120px"><br><b>LED</b><br><span class="chico">se ilumina</span></div>
+    <div><img src="assets/comp_bat.png" alt="" style="width:min(120px, 100%)"><br><b>Batería</b><br><span class="chico">da la energía</span></div>
+    <div><img src="assets/comp_r.png"   alt="" style="width:min(120px, 100%)"><br><b>Resistencia</b><br><span class="chico">frena la corriente</span></div>
+    <div><img src="assets/comp_sw.png"  alt="" style="width:min(120px, 100%)"><br><b>Interruptor</b><br><span class="chico">abre y cierra el paso</span></div>
+    <div><img src="assets/comp_c.png"   alt="" style="width:min(120px, 100%)"><br><b>Capacitor</b><br><span class="chico">guarda un poquito de energía</span></div>
+    <div><img src="assets/comp_led.png" alt="" style="width:min(120px, 100%)"><br><b>LED</b><br><span class="chico">se ilumina</span></div>
     <div style="display:grid; place-items:center"><span class="estallido">¡CINCO<br>PIEZAS!</span></div>
   </div>
   <div class="aviso">
@@ -942,7 +1043,7 @@
 <section class="pagina doblada" id="consejos">
   <div class="cabecera"><span>CIRCUITO</span><span>CONSEJOS</span></div>
   <h2>Consejos de experto</h2>
-  <ol style="padding-left:24px; font-size:18px">
+  <ol style="padding-left:22px">
     <li style="margin-bottom:10px"><b>Primero la batería.</b> Ve derecho hacia ella: los pasos que des antes no cuentan para armar el circuito.</li>
     <li style="margin-bottom:10px"><b>Mira las bolitas del lomo.</b> La distancia entre dos bolitas en el cuerpo es la misma que entre las dos piezas en el tablero.</li>
     <li style="margin-bottom:10px"><b>No te encierres.</b> Antes de entrar en una esquina, piensa por dónde vas a salir.</li>
