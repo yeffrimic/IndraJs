@@ -1,22 +1,29 @@
 import GameState    from '../state/GameState.js';
 import Dev          from '../Dev.js';
-import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
+import SpriteConfig from '../SpriteConfig.js';
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
-    // pantalla de carga
+    // pantalla de carga: barra de plastilina sobre chocolate (el mismo tono de las
+    // transiciones, así el arranque ya se siente parte del juego)
     const { width, height } = this.scale;
-    const bar = this.add.rectangle(width/2, height/2, 300, 6, 0x2a2a4a).setOrigin(0.5);
-    const fill = this.add.rectangle(width/2 - 150, height/2, 0, 6, 0x4fc3f7).setOrigin(0, 0.5);
-    const txt = this.add.text(width/2, height/2 + 20, 'cargando...', {
-      fontSize: '12px', color: '#555', fontFamily: FUENTE
-    }).setOrigin(0.5);
+    this.cameras.main.setBackgroundColor('#2a1a0e');
+    const W = 320, H = 26, x0 = width / 2 - W / 2, y0 = height / 2 - H / 2;
+    const marco = this.add.graphics();
+    marco.fillStyle(0x1a0e06, 0.6); marco.fillRoundedRect(x0 - 6, y0 - 2, W + 12, H + 12, 18);
+    marco.fillStyle(0xf7e7bd, 1);   marco.fillRoundedRect(x0 - 6, y0 - 6, W + 12, H + 12, 18);
+    const fill = this.add.graphics();
+    const dot = this.add.circle(width / 2, y0 - 40, 12, 0xf08a3c).setStrokeStyle(4, 0xa35a1e);
+    this.tweens.add({ targets: dot, y: y0 - 60, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.easeOut' });
 
     this.load.on('progress', v => {
-      fill.width = 300 * v;
-      txt.setText(`cargando... ${Math.floor(v * 100)}%`);
+      fill.clear();
+      if (v <= 0) return;
+      fill.fillStyle(0xa35a1e, 1); fill.fillRoundedRect(x0, y0 + 3, Math.max(H, W * v), H - 3, 11);
+      fill.fillStyle(0xf08a3c, 1); fill.fillRoundedRect(x0, y0, Math.max(H, W * v), H - 4, 11);
+      fill.fillStyle(0xffffff, 0.35); fill.fillRoundedRect(x0 + 8, y0 + 4, Math.max(8, W * v - 16), 5, 2);
     });
 
     // carga tolerante: los assets faltantes se ignoran (caen al dibujo vectorial)
@@ -49,14 +56,15 @@ export default class BootScene extends Phaser.Scene {
     // ?editroom  → entra al cuarto en modo editor (arrastrar objetos)
     // ?editstore → entra a la tienda en modo editor
     // ?store     → entra a la tienda normal
+    // ?room      → entra al cuarto normal (sin editor)
     if (Dev.activo()) {
       const params = new URLSearchParams(location.search);
       if (params.has('nivel') || params.has('sel') || params.has('editroom') ||
-          params.has('editstore') || params.has('store')) {
+          params.has('editstore') || params.has('store') || params.has('room')) {
         GameState.login('Dev');
         GameState.ultimoNivelDesbloqueado = Math.max(GameState.ultimoNivelDesbloqueado, 99);  // todo desbloqueado para testear
         if (params.has('sel'))            this.scene.start('LevelSelectScene');
-        else if (params.has('editroom'))  this.scene.start('RoomScene');
+        else if (params.has('editroom') || params.has('room')) this.scene.start('RoomScene');
         else if (params.has('editstore') || params.has('store')) this.scene.start('StoreScene');
         else {
           const idx = parseInt(params.get('nivel'), 10) || 0;

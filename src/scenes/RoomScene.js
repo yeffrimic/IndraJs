@@ -1,6 +1,11 @@
 import GameState    from '../state/GameState.js';
 import Dev          from '../Dev.js';
 import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
+import Sonido       from '../Sonido.js';
+import {
+  CLAY, losa, boton, estrella, estiloTexto, botonSonido,
+  irA, entrarEscena, aparecer, cartel,
+} from '../ClayUI.js';
 import { LEVELS, packRequerido } from '../levels.js';
 
 export default class RoomScene extends Phaser.Scene {
@@ -9,6 +14,7 @@ export default class RoomScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     const S = SpriteConfig;
+    entrarEscena(this);
 
     // ── editor visual del cuarto (?editroom, sólo en desarrollo) ──
     this.editMode  = Dev.flag('editroom');
@@ -27,38 +33,18 @@ export default class RoomScene extends Phaser.Scene {
     const WB_X = this.layout.workbench.x, WB_Y = this.layout.workbench.y;
     const wbObj = S.colocar(this, 'cuarto', 'workbench', WB_X, WB_Y,
       () => this._dibujarWorkbenchPlaceholder(WB_X, WB_Y));
-    // label y hint siempre visibles
-    const wbLabel = this.add.text(WB_X, WB_Y + 55, '⚡ WORKBENCH', {
-      fontSize: '11px', color: '#a5d6a7', fontFamily: FUENTE
-    }).setOrigin(0.5);
-
-    this.interactHint = this.add.text(WB_X, WB_Y + 72, '[ acércate ]', {
-      fontSize: '10px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0.5).setAlpha(0);
-
-    this.tweens.add({
-      targets: this.interactHint,
-      alpha: { from: 0, to: 1 },
-      duration: 600, yoyo: true, repeat: -1
-    });
-    this.editables.push({ nombre: 'workbench', x: WB_X, y: WB_Y, objs: [wbObj, wbLabel, this.interactHint].filter(Boolean) });
+    // Burbuja sobre el workbench: de lejos es chiquita y flota ("vení para acá");
+    // de cerca crece a un botón ▶ que se puede tocar. Reemplaza a los carteles
+    // "⚡ WORKBENCH" y "[ E ] entrar al workbench", que un chico de 6 no lee.
+    this.burbujaWB = this._crearBurbuja(WB_X, WB_Y - 118, 'play', CLAY.verde, () => this._entrarAlWorkbench());
+    this.editables.push({ nombre: 'workbench', x: WB_X, y: WB_Y, objs: [wbObj, this.burbujaWB].filter(Boolean) });
 
     // ── tienda ──
     const TIENDA_X = this.layout.tienda.x, TIENDA_Y = this.layout.tienda.y;
     const tdObj = S.colocar(this, 'cuarto', 'tienda', TIENDA_X, TIENDA_Y,
       () => this._dibujarTiendaPlaceholder(TIENDA_X, TIENDA_Y));
-    const tdLabel = this.add.text(TIENDA_X, TIENDA_Y + 55, '🛒 TIENDA', {
-      fontSize: '11px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    this.tiendaHint = this.add.text(TIENDA_X, TIENDA_Y + 72, '[ acércate ]', {
-      fontSize: '10px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({
-      targets: this.tiendaHint,
-      alpha: { from: 0, to: 1 },
-      duration: 600, yoyo: true, repeat: -1
-    });
-    this.editables.push({ nombre: 'tienda', x: TIENDA_X, y: TIENDA_Y, objs: [tdObj, tdLabel, this.tiendaHint].filter(Boolean) });
+    this.burbujaTD = this._crearBurbuja(TIENDA_X, TIENDA_Y - 92, 'tienda', CLAY.naranja, () => irA(this, 'StoreScene'));
+    this.editables.push({ nombre: 'tienda', x: TIENDA_X, y: TIENDA_Y, objs: [tdObj, this.burbujaTD].filter(Boolean) });
 
     // ── muebles comprados ──
     this._dibujarMuebles(S);
@@ -86,6 +72,9 @@ export default class RoomScene extends Phaser.Scene {
 
     // ── HUD ──
     this._crearHUD(width, height);
+
+    // la música arranca en el cuarto (ya hubo un toque en el login, así que el navegador la deja sonar)
+    Sonido.arrancarMusica();
 
     // ── bienvenida ──
     if (!this.editMode) this._mostrarBienvenida(width, height);
@@ -403,75 +392,88 @@ export default class RoomScene extends Phaser.Scene {
     return g;
   }
 
+  // ── HUD de plastilina ──
+  // Tres "frasquitos" con icono + número (monedas, estrellas, energía del día) y,
+  // a la derecha, mapa de niveles y sonido. Antes era una barra azul marino con
+  // "★ 1240 pts · 🪙 300 · ⭐ 12/150 · 📅 te quedan 10 de 10".
   _crearHUD(width, height) {
-    // barra superior
-    this.add.rectangle(0, 0, width, 30, 0x080814, 0.95).setOrigin(0);
-    this.add.rectangle(0, 30, width, 1, 0x2a2a4a).setOrigin(0);
+    const y = 34;
+    const frasco = (x, w, icono, valor, colTxt, colBorde) => {
+      const c = this.add.container(x, y).setDepth(150);
+      c.add(losa(this, 0, 0, w, 50, { fill: CLAY.cremaClaro, r: 22, canto: 5, grosor: 3 }));
+      c.add(icono(-w / 2 + 26, -3));
+      c.add(this.add.text(-w / 2 + 48, -3, `${valor}`, estiloTexto(22, colTxt, colBorde, 5)).setOrigin(0, 0.5));
+      return c;
+    };
+    const img = key => (x, yy) => {
+      const k = SpriteConfig.get('ui', key);
+      return (k && this.textures.exists(k)) ? this.add.image(x, yy, k).setDisplaySize(36, 36) : this.add.circle(x, yy, 14, 0xf6c945);
+    };
+    frasco(78, 132, img('moneda'), GameState.monedas, '#ffd54a', '#8a5a10');
+    frasco(214, 120, (x, yy) => estrella(this, x, yy, true, 34), GameState.totalEstrellas(), '#ffd54a', '#8a5a10');
+    // energía: niveles que le quedan HOY (incluye la energía comprada)
+    frasco(338, 108, img('energia'), GameState.nivelesRestantesHoy(), '#7cc35a', '#2f5a1e');
 
-    this.add.text(10, 15, `👤 ${GameState.username}`, {
-      fontSize: '12px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0, 0.5);
+    boton(this, width - 100, y, { w: 54, fill: CLAY.lila, icono: 'mapa', onTap: () => irA(this, 'LevelSelectScene') }).setDepth(150);
+    botonSonido(this, width - 40, y, 46, 150);
 
-    this.txtPuntos = this.add.text(width / 2 - 110, 15, `★ ${GameState.puntosTotal} pts`, {
-      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5, 0.5);
+    // cerrar sesión: puertita chica abajo a la izquierda (es para el adulto)
+    boton(this, 30, height - 30, { w: 40, fill: CLAY.offFill, colorIcono: 0x8a7a58, icono: 'puerta', onTap: () => {
+      GameState.username = null; irA(this, 'LoginScene');
+    }}).setDepth(150).setAlpha(0.8);
+  }
 
-    this.txtMonedas = this.add.text(width / 2, 15, `🪙 ${GameState.monedas}`, {
-      fontSize: '12px', color: '#ffd54f', fontFamily: FUENTE
-    }).setOrigin(0.5, 0.5);
+  // ── burbujas de interacción (workbench / tienda) ──
+  _crearBurbuja(x, y, ico, fill, onTap) {
+    const c = this.add.container(x, y).setDepth(120);
+    const b = boton(this, 0, 0, { w: 70, fill, icono: ico, sonido: 'pop', onTap: () => { if (!this.editMode) onTap(); } });
+    // colita del globo apuntando al objeto
+    const cola = this.add.graphics();
+    cola.fillStyle(fill, 1); cola.fillTriangle(-12, 26, 12, 26, 0, 46);
+    c.add([cola, b]);
+    c.setScale(0.6).setAlpha(0.85);
+    if (!this.editMode) this.tweens.add({ targets: c, y: y - 10, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    return c;
+  }
 
-    this.add.text(width / 2 + 110, 15, `⭐ ${GameState.totalEstrellas()}/${LEVELS.length * 3}`, {
-      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5, 0.5);
-
-    // "te quedan N de M" — M incluye la energía comprada (antes estaba fijo en 10,
-    // así que comprar energía no se reflejaba acá)
-    const restantes = GameState.nivelesRestantesHoy();
-    this.add.text(width - 10, 15, `📅 te quedan ${restantes} de ${GameState.cupoDelDia()}`, {
-      fontSize: '12px', color: '#a5d6a7', fontFamily: FUENTE
-    }).setOrigin(1, 0.5);
-
-    // cerrar sesión
-    const logout = this.add.text(10, height - 10, 'cerrar sesión', {
-      fontSize: '10px', color: '#333', fontFamily: FUENTE
-    }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
-    logout.on('pointerover',  () => logout.setColor('#ef5350'));
-    logout.on('pointerout',   () => logout.setColor('#333'));
-    logout.on('pointerdown',  () => { GameState.username = null; this.scene.start('LoginScene'); });
+  _estadoBurbuja(c, cerca) {
+    if (!c) return;
+    this.tweens.add({ targets: c, scale: cerca ? 1.05 : 0.6, alpha: cerca ? 1 : 0.85, duration: 260, ease: 'Back.easeOut' });
+    if (cerca) Sonido.pop();
   }
 
   _mostrarBienvenida(width, height) {
-    const completados = GameState.nivelesCompletados.length;
-    const msg = completados === 0
-      ? `¡bienvenido, ${GameState.username}! acércate al workbench`
-      : `¡hola de nuevo, ${GameState.username}! nivel ${completados + 1} te espera`;
-
-    const toast = this.add.text(width / 2, height - 20, msg, {
-      fontSize: '12px', color: '#ccc', fontFamily: FUENTE,
-      backgroundColor: '#12122a', padding: { x: 14, y: 7 }
-    }).setOrigin(0.5, 1).setAlpha(0);
-
-    this.tweens.add({
-      targets: toast, alpha: 1, duration: 400,
-      hold: 3000, yoyo: true,
-      onComplete: () => toast.destroy()
-    });
+    cartel(this, width / 2, height - 46, `👋  ${GameState.username}`, { dur: 2200 });
   }
 
-  _mostrarMensajeDia() {
+  // panel de aviso reutilizable: icono grande + botones
+  _panelAviso(dibujarIcono, botones) {
     const { width, height } = this.scale;
-    const panel = this.add.rectangle(width/2, height/2, 360, 140, 0x12122a)
-      .setStrokeStyle(1, 0x2a2a4a);
-    const t1 = this.add.text(width/2, height/2 - 28, '¡ya completaste tus 10 niveles de hoy!', {
-      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    const t2 = this.add.text(width/2, height/2 + 2, 'vuelve mañana para continuar', {
-      fontSize: '11px', color: '#666', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    const btn = this.add.text(width/2, height/2 + 36, '[ ok ]', {
-      fontSize: '13px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    btn.on('pointerdown', () => { [panel,t1,t2,btn].forEach(o=>o.destroy()); });
+    const velo = this.add.rectangle(0, 0, width, height, 0x1a0e06, 0.5).setOrigin(0).setDepth(400).setInteractive();
+    const panel = this.add.container(width / 2, height / 2).setDepth(401);
+    panel.add(losa(this, 0, 0, 340, 260, { fill: CLAY.cremaClaro, borde: CLAY.borde, r: 32, canto: 10, grosor: 5 }));
+    dibujarIcono(panel);
+    const cerrar = () => { velo.destroy(); panel.destroy(); };
+    botones.forEach((bt, i) => {
+      const x = (i - (botones.length - 1) / 2) * 110;
+      panel.add(boton(this, x, 74, { w: bt.w || 76, fill: bt.fill, icono: bt.icono,
+        onTap: () => { cerrar(); if (bt.onTap) bt.onTap(); } }));
+    });
+    aparecer(this, panel);
+  }
+
+  // ya no quedan niveles hoy: luna dormida + energía apagada
+  _mostrarMensajeDia() {
+    Sonido.error();
+    this._panelAviso(p => {
+      p.add(this.add.text(-44, -40, '🌙', { fontSize: '76px' }).setOrigin(0.5));
+      const ek = SpriteConfig.get('ui', 'energia');
+      if (ek && this.textures.exists(ek)) p.add(this.add.image(54, -36, ek).setDisplaySize(70, 70).setAlpha(0.45));
+      p.add(this.add.text(0, 18, 'vuelve mañana', { fontSize: '15px', color: CLAY.txtSuave, fontFamily: FUENTE }).setOrigin(0.5));
+    }, [
+      { icono: 'check', fill: CLAY.verde },
+      { icono: 'tienda', fill: CLAY.naranja, onTap: () => irA(this, 'StoreScene', { cat: 'energia' }) },
+    ]);
   }
 
   update() {
@@ -498,13 +500,11 @@ export default class RoomScene extends Phaser.Scene {
 
     if (cercaWB !== this.cercaDelWorkbench) {
       this.cercaDelWorkbench = cercaWB;
-      this.interactHint.setText(cercaWB ? '[ E ] entrar al workbench' : '[ acércate ]');
-      this.interactHint.setAlpha(cercaWB ? 1 : 0);
+      this._estadoBurbuja(this.burbujaWB, cercaWB);
     }
     if (cercaTD !== this.cercaDeTienda) {
       this.cercaDeTienda = cercaTD;
-      this.tiendaHint.setText(cercaTD ? '[ E ] abrir la tienda' : '[ acércate ]');
-      this.tiendaHint.setAlpha(cercaTD ? 1 : 0);
+      this._estadoBurbuja(this.burbujaTD, cercaTD);
     }
 
     // activar con E el objeto cercano
@@ -514,7 +514,7 @@ export default class RoomScene extends Phaser.Scene {
   // entra a workbench o tienda según cuál esté cerca
   _interactuar() {
     if (this.editMode) return;   // en el editor, E exporta el layout (no entra a nada)
-    if (this.cercaDeTienda)        this.scene.start('StoreScene');
+    if (this.cercaDeTienda)        irA(this, 'StoreScene');
     else if (this.cercaDelWorkbench) this._entrarAlWorkbench();
   }
 
@@ -529,82 +529,50 @@ export default class RoomScene extends Phaser.Scene {
       this._mostrarMensajePack();
       return;
     }
-    this.scene.start('PuzzleScene', { nivelIdx: idx });
+    irA(this, 'PuzzleScene', { nivelIdx: idx });
   }
 
+  // el próximo nivel es de un tablero sin comprar: candado → tienda
   _mostrarMensajePack() {
-    const { width, height } = this.scale;
-    const panel = this.add.rectangle(width/2, height/2, 380, 140, 0x12122a)
-      .setStrokeStyle(1, 0xfff176);
-    const t1 = this.add.text(width/2, height/2 - 28, 'este nivel es de un pack bloqueado', {
-      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    const t2 = this.add.text(width/2, height/2 + 2, 'desbloquéalo en la 🛒 tienda', {
-      fontSize: '11px', color: '#666', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    const btn = this.add.text(width/2, height/2 + 36, '[ ir a la tienda ]', {
-      fontSize: '13px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    btn.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
-    const cerrar = this.add.text(width/2, height/2 + 58, '[ cerrar ]', {
-      fontSize: '10px', color: '#444', fontFamily: FUENTE
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    cerrar.on('pointerdown', () => [panel,t1,t2,btn,cerrar].forEach(o=>o.destroy()));
+    Sonido.error();
+    this._panelAviso(p => {
+      const lk = SpriteConfig.get('ui', 'candado');
+      if (lk && this.textures.exists(lk)) p.add(this.add.image(0, -40, lk).setDisplaySize(96, 96));
+    }, [
+      { icono: 'cerrar', fill: CLAY.rojo, w: 64 },
+      { icono: 'tienda', fill: CLAY.naranja, w: 86, onTap: () => irA(this, 'StoreScene', { cat: 'niveles' }) },
+    ]);
   }
 
+  // Flechas de plastilina (mantener = caminar). No hay botón [ E ]: en móvil se
+  // toca directamente la burbuja que aparece sobre el workbench o la tienda.
   _crearControlesMobile(width, height) {
-    const btnSz = 48, gap = 5;
-    // pad izquierdo — esquina inferior izquierda
-    const bx = 80, by = height - 80;
+    const S = 74, sep = 66;
+    const bx = 100, by = height - 100;
 
     const dirs = [
-      { label: '▲', key: 'btn_up',    vx:  0,  vy: -1, x: bx,           y: by - btnSz - gap },
-      { label: '▼', key: 'btn_down',  vx:  0,  vy:  1, x: bx,           y: by + btnSz + gap },
-      { label: '◀', key: 'btn_left',  vx: -1,  vy:  0, x: bx - btnSz - gap, y: by },
-      { label: '▶', key: 'btn_right', vx:  1,  vy:  0, x: bx + btnSz + gap, y: by },
+      { label: '▲', key: 'btn_up',    vx:  0, vy: -1, x: bx,       y: by - sep },
+      { label: '▼', key: 'btn_down',  vx:  0, vy:  1, x: bx,       y: by + sep },
+      { label: '◀', key: 'btn_left',  vx: -1, vy:  0, x: bx - sep, y: by },
+      { label: '▶', key: 'btn_right', vx:  1, vy:  0, x: bx + sep, y: by },
     ];
 
     dirs.forEach(d => {
-      const btn = this.add.rectangle(d.x, d.y, btnSz, btnSz, 0x12122a)
-        .setStrokeStyle(1.5, 0x2a2a5a)
-        .setInteractive({ useHandCursor: true })
-        .setDepth(10);
-      // flecha: sprite (ui.btn_*) o glifo de texto como fallback
-      const arr = SpriteConfig.colocar(this, 'ui', d.key, d.x, d.y, () => this.add.text(d.x, d.y, d.label, {
-        fontSize: '22px', color: '#4fc3f7', fontFamily: FUENTE
-      }).setOrigin(0.5)).setDepth(11);
-      if (arr instanceof Phaser.GameObjects.Image) arr.setDisplaySize(btnSz * 0.7, btnSz * 0.7);
+      const c = this.add.container(d.x, d.y).setDepth(10);
+      const k = SpriteConfig.get('ui', d.key);
+      if (k && this.textures.exists(k)) c.add(this.add.image(0, 0, k).setDisplaySize(S, S));
+      else {
+        c.add(losa(this, 0, 0, S * 0.8, S * 0.8, { fill: CLAY.naranja, r: S * 0.4 }));
+        c.add(this.add.text(0, -4, d.label, estiloTexto(26)).setOrigin(0.5));
+      }
+      c.setSize(S, S).setInteractive({ useHandCursor: true }).setAlpha(0.92);
 
       // touch — mantener presionado mueve continuamente
-      btn.on('pointerdown', () => {
-        this._touchDir = { vx: d.vx, vy: d.vy };
-        btn.setFillStyle(0x1a1a3a);
-        btn.setStrokeStyle(1.5, 0x4fc3f7);
-      });
-      btn.on('pointerup',   () => {
-        this._touchDir = null;
-        btn.setFillStyle(0x12122a);
-        btn.setStrokeStyle(1.5, 0x2a2a5a);
-      });
-      btn.on('pointerout',  () => {
-        this._touchDir = null;
-        btn.setFillStyle(0x12122a);
-        btn.setStrokeStyle(1.5, 0x2a2a5a);
-      });
+      const soltar = () => { this._touchDir = null; c.setScale(1); };
+      c.on('pointerdown', () => { this._touchDir = { vx: d.vx, vy: d.vy }; c.setScale(1.08, 0.88); });
+      c.on('pointerup',   soltar);
+      c.on('pointerout',  soltar);
     });
-
-    // botón E — esquina inferior derecha
-    const eBg = this.add.rectangle(width - 60, height - 80, 80, 48, 0x0a1a2a)
-      .setStrokeStyle(1.5, 0x4fc3f7)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(10);
-    this.add.text(width - 60, height - 80, '[ E ]', {
-      fontSize: '14px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0.5).setDepth(11);
-
-    eBg.on('pointerdown', () => this._interactuar());
-    eBg.on('pointerover',  () => eBg.setFillStyle(0x0d2a3e));
-    eBg.on('pointerout',   () => eBg.setFillStyle(0x0a1a2a));
 
     this._touchDir = null;
   }

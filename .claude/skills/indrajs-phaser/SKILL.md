@@ -27,9 +27,17 @@ en estilos de `text` → string `'#rrggbb'`. Conversión usada: `` `#${color.toS
 
 ## Patrones del proyecto que NO son obvios (imitarlos)
 
-- **Render 100% vectorial por defecto** (`USE_SPRITES:false`): todo se dibuja con `this.add.graphics()`
-  y formas (`fillRoundedRect`, `strokeCircle`, `strokeTriangle`, `beginPath/lineTo/strokePath`). No metas
-  imágenes salvo que se active `SpriteConfig`.
+- **Sprites de plastilina + vector de plastilina** (`USE_SPRITES:true`): fondos, muebles, personajes,
+  componentes, cabeza de la serpiente e iconos de UI son PNG registrados en `SpriteConfig`. El tablero,
+  las fichas, el cuerpo de la serpiente, los botones y los paneles se dibujan en vector con las piezas
+  de `ClayUI` (`losa`, `boton`, `ICONOS`) para que combinen.
+- **Toda la UI sale de `src/ClayUI.js`.** No crear rectángulos con borde fino ni textos-botón sueltos:
+  `boton(scene, x, y, { w, fill, icono | imagen | texto, onTap })` ya trae volumen, aplastado al tocar,
+  rebote y sonido. Paneles con `losa(...)`. Avisos con `cartel(...)`.
+- **Cambiar de escena siempre con `irA(this, 'Escena', data)`** y empezar todo `create()` con
+  `entrarEscena(this)` (fundido + reset de `_saliendo`, que sobrevive por la instancia reutilizada).
+- **Sonido con `Sonido.<efecto>()`** (`click`, `pop`, `paso`, `golpe`, `ding(n)`, `chispa`, `estrella(i)`,
+  `moneda`, `error`, `victoria`). Es WebAudio sintetizado: no hay archivos que cargar.
 - **Placeholder del personaje (RoomScene)**: cuerpo de física **invisible** `this.physics.add.image(x,y,'__DEFAULT').setVisible(false)` que mueve la posición, + un `Graphics` (`_dibujarPersonajePlaceholder`) **redibujado cada frame** en `update()` siguiendo `player.x/y`. Si tocás el personaje, respetá este doble objeto.
 - **Dos modelos de movimiento distintos** (no mezclarlos):
   - *RoomScene* = **continuo** con física arcade: `setVelocity(vx,vy)`, velocidad 160, touch mantiene dirección vía `this._touchDir`.
@@ -80,15 +88,17 @@ poner archivos en `assets/`, ajustar paths/frames en `SpriteConfig.js`, y poner 
 ## Convenciones de estilo (imitar el código existente)
 
 - **Idioma español** en nombres de métodos/variables/comentarios: `_dibujarGrid`, `_mover`, `_ganar`, `nivelIdx`, `serpiente`. Métodos privados con prefijo `_`.
-- Paleta del juego (reutilizar, no inventar colores nuevos sin razón):
-  - fondo `0x0d0d1f` / paneles `0x080814` `0x09091a` / bordes `0x2a2a4a`
-  - cian `0x4fc3f7` (BAT, acento principal) · morado `0xce93d8` (R) · verde agua `0xa5d6a7` (CAP)
-  - naranja `0xff7043` (LED) · amarillo `0xfff176` (SW/puntos) · verde win `0x4caf50` · rojo `0xef5350`
-  - serpiente cuerpo `0x1a9e65`
-- Tipografía **siempre `monospace`**; tamaños chicos (9–18px); texto con `stroke:'#000000'` cuando va sobre el grid.
+- **Estilo único: plastilina cálida** (desde v0.8; el tema oscuro/neón del puzzle se eliminó). Paleta en
+  `CLAY` de `ClayUI.js`: crema `0xf7e7bd`, madera `0xc88a4a`, ficha `0xf6e6c0`, y para botones
+  `verde` `naranja` `azul` `rojo` `amarillo` `lila`; el canto/borde se calcula con `oscurecer(color)`.
+  Fondo de transiciones chocolate `0x2a1a0e`. Colores de componentes en `PuzzleScene._compDef`.
+- Tipografía: `FUENTE` (Fredoka, redondeada). Texto visible para el chico con `estiloTexto(tam, color, contorno)`
+  — grueso y con contorno, nunca gris chico sobre oscuro.
+- **Público de 6-8 años que casi no lee: icono/color/animación/sonido antes que texto.** Nada de
+  "mov", "pts", siglas ni instrucciones escritas; si hace falta texto, es para el adulto y va chico.
 - Layout responsivo: ramificar con `const isMobile = window.isMobile || false` (en móvil no hay columna de controles derecha; el d-pad va abajo). Recalcular tamaños de tile, no hardcodear píxeles absolutos del grid.
 - Limpiar objetos antes de redibujar (patrón `this.tileObjects[key].forEach(o => o.destroy())`) para no acumular Game Objects.
-- UI en español, minúsculas, estética terminal/retro (`'mover la\nserpiente'`, `'salir'`, `'R — reiniciar'`).
+- Botones grandes (≥ 54px lógicos) y separados: manos chiquitas, también en móvil.
 
 ## Probar un cambio
 

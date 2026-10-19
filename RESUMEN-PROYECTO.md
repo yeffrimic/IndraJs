@@ -4,7 +4,7 @@
 > **no se deduce** leyendo los archivos: por qué las cosas son como son, y las trampas que ya
 > costaron trabajo una vez.
 >
-> Última revisión: 22 jul 2026.
+> Última revisión: 19 oct 2026 (v0.8, rediseño visual).
 
 ---
 
@@ -46,14 +46,15 @@ No romper ninguna de estas:
 | `src/levels.js` | los 50 niveles, el helper `G()`, `packRequerido()` y `TIERS` (currículo) |
 | `src/tienda.js` | catálogo y precios; el comentario de cabecera explica cómo se calcularon |
 | `src/SpriteConfig.js` | **registro central de assets** + la constante `FUENTE` |
-| `src/ClayUI.js` | paleta cálida y widgets del estilo plastilina |
+| `src/ClayUI.js` | **el lenguaje visual de todo el juego**: paleta, `losa`, `boton`, iconos vectoriales, `irA`/`entrarEscena`, confeti, estrellas, `cartel` |
+| `src/Sonido.js` | efectos y música sintetizados con WebAudio; preferencia de silencio por dispositivo |
 | `src/dev-guard.js` | define `window.__DEV__` según hostname (script clásico, corre primero) |
 | `src/Dev.js` | `activo()` / `flag()` / `param()` para las escenas |
 | `src/state/GameState.js` | **todo el estado persistente**: progreso, monedas, estrellas, tiempos, cupo diario, compras |
 | `scenes/BootScene.js` | precarga lo que liste `SpriteConfig.listarParaCargar()` |
-| `scenes/LoginScene.js` | 6 perfiles fijos (array `PERFILES`), no hay alta de usuarios |
+| `scenes/LoginScene.js` | 6 perfiles fijos (array `PERFILES`), no hay alta de usuarios; elige personaje la primera vez |
 | `scenes/RoomScene.js` | el cuarto: física arcade, muebles, proximidad al workbench |
-| `scenes/LevelSelectScene.js` | selector por concepto, con scroll |
+| `scenes/LevelSelectScene.js` | mapa de niveles en zigzag, con scroll |
 | `scenes/PuzzleScene.js` | el puzzle entero — el archivo más grande y el más delicado |
 | `scenes/StoreScene.js` | la tienda |
 
@@ -119,7 +120,37 @@ mal rendía el 84 % de jugar perfecto: las estrellas no servían para nada.
 
 En `SpriteConfig`, marca lo que todavía no está dibujado: no se precarga (evita 404s) y la escena
 cae al placeholder. **No es una bandera muerta** — es la lista de lo que falta pedirle al
-ilustrador. Hoy quedan tres: `tile_head`, `tile_body`, `pelota`.
+ilustrador. Hoy queda una: `pelota`. (`tile_head` y `tile_body` dejaron de hacer falta en v0.8: el
+tablero y el cuerpo de la serpiente se dibujan en vector. La categoría `grid` y `fondos/puzzle.png`
+ya no se cargan.)
+
+### El camino sugerido es una solución, no un dibujo
+
+Hasta v0.8 la ruta de piedritas se armaba con tramos en L entre componentes, sin simular el cuerpo:
+en los 50 niveles llevaba a chocar con la serpiente o no conectaba. Ahora la calcula
+PuzzleScene._resolver (IDA* con la misma regla de choque que _mover) usando _cotaRestante, una cota
+exacta: cada componente k termina en el índice de cuerpo P[k], así que con la cadena tendida hasta k
+faltan P[k] - t pasos. Encuentra la ruta en el óptimo en los 50 niveles en menos de 5 ms. Si el chico
+se desvía, se recalcula desde ahí (presupuesto de nodos acotado); si no hay salida, late el ↻ y la
+manito lo señala. Cambiar las reglas de movimiento obliga a cambiar el solver igual.
+
+### Toda salida de escena pasa por `irA()`
+
+`irA(scene, key, data)` hace el fundido y recién después `scene.start`. Usa la bandera
+`scene._saliendo` para no salir dos veces por doble toque, y **`entrarEscena(scene)` la resetea**:
+tiene que ser lo primero de cada `create()`, por lo de la instancia reutilizada. Una escena nueva que
+se olvide de llamarla queda trabada después de la primera salida.
+
+### Los layouts guardados pisan los nuevos defaults
+
+`store_layout` y `room_layout` (localStorage, del editor) ganan sobre `_layoutDefaults*()`. En v0.8
+el saldo, las pestañas y el botón de volver de la tienda cambiaron de tamaño: si en una máquina
+quedan corridos, es un layout viejo guardado → `[R]` dentro de `?editstore`.
+
+### Login sin herencia de perfil
+
+`GameState._cargarPerfil()` resetea todos los campos antes de leer. Antes, cerrar sesión y entrar
+con un perfil **nuevo** heredaba en memoria el progreso del anterior y lo guardaba como propio.
 
 ### Excepciones de assets
 
@@ -154,6 +185,12 @@ Para no volver a discutirlas:
 | La esquina de entrada varía por nivel | Frescura, y además permite elegir la que no obliga a dar vueltas |
 | El óptimo se hornea en los datos | Calcularlo en runtime exigiría un solver dentro del juego |
 | Modo desarrollo por hostname | Imposible olvidarse un flag prendido antes de publicar |
+| Un solo estilo (plastilina) en todo el juego | La mezcla de tres estilos —plastilina, neón oscuro y paneles web— era lo que hacía ver el juego amateur |
+| El puzzle usa el cuarto oscurecido de fondo | El puzzle "pasa en el cuarto"; un fondo propio de otro estilo rompía la continuidad |
+| Mismo layout del puzzle en escritorio y móvil | La resolución lógica es fija; el pad grande a la derecha queda bajo el pulgar en un celu apaisado |
+| Audio sintetizado, no grabado | Nada que precargar ni licenciar; tono coherente. Si llegan sonidos grabados, se cambia el cuerpo de cada método de `Sonido` |
+| El silencio se guarda por dispositivo | Si el aula pide silencio, es para todos los perfiles; por eso no va en `GameState` |
+| Estrellas en vivo en el HUD | Enseñan "más corto es mejor" sin mostrar "mov" ni "óptimo" |
 
 ---
 
@@ -169,23 +206,22 @@ Para no volver a discutirlas:
 - **Tiempos por nivel** (`{mejor, ultimo, intentos}`), base para analizar dificultad.
 - **Modo desarrollo** aislado del usuario final.
 
+- **v0.8 — rediseño visual.** Todo el juego en plastilina (antes el puzzle era neón oscuro y los
+  HUD paneles azul marino); botones de icono con volumen que se aplastan y suenan; tablero de madera
+  con fichas de masa; serpiente como tubo continuo con cabeza que se desliza; sin siglas, sin "mov",
+  "óptimo" ni "pts"; estrellas en vivo; mapa de niveles; tienda con dibujos grandes y precio en
+  moneda; audio sintetizado; fundidos entre escenas; celebración con confeti; manito guía en los 3
+  primeros niveles; elección de personaje en el primer login; marca de agua ✦ borrada de los fondos.
+
 ### Pendiente, por impacto en el niño
 
 | Prioridad | Qué | Nota |
 |---|---|---|
-| 🔴 Alta | Quitar las siglas `BAT / R / CAP / LED` del tablero | Las piezas ya se reconocen por su forma; lo que sobra es el texto |
-| 🔴 Alta | Onboarding sin texto | Hoy no puede empezar sin un adulto al lado |
-| 🟡 Media | Audio | Refuerza cada acción; no bloquea jugar |
-| 🟡 Media | Pantalla para elegir personaje | `GameState.personaje` ya existe y persiste: falta sólo la UI |
-| 🟡 Media | Botones con ícono, esconder "mov / óptimo" | El arte ya está, falta cablearlo |
-| 🟢 Pulido | Transiciones y celebración | |
+| 🟡 Media | Onboarding animado antes del nivel 1 | La manito ayuda, pero no muestra la mecánica de "cada parte del cuerpo va en su hueco" |
+| 🟡 Media | Voz opcional | "¡muy bien!", "¡otra vez!": refuerzo sin texto |
 | 🟢 Deuda | Poner al día editor y tester | Ver abajo |
-| 🟢 Pulido | 3 piezas de arte | `tile_head`, `tile_body`, `pelota` |
+| 🟢 Pulido | 1 pieza de arte | `pelota` |
 | 🟢 Pulido | Profundidad en el cuarto | Caminar por detrás de los muebles |
-
-**Recomendación:** las dos de prioridad alta van juntas y en ese orden. Son el mismo problema visto
-desde dos lados —enseñar sin texto— y resolverlas convierte "un juego que hay que explicar" en "un
-juego que un niño de 6 abre solo".
 
 ### Deuda conocida
 
@@ -225,6 +261,14 @@ Dos aprendizajes de este método, los dos por haberlos sufrido:
 
 Para lo demás: verificación a mano en el navegador con la consola abierta (F12), y `window.isMobile`
 emulando touch en DevTools para el layout móvil.
+
+**Capturas automáticas.** El `--screenshot` de Edge/Chrome headless no sirve para este juego: con
+`--virtual-time-budget` los tweens y fundidos no avanzan (todo sale oscuro y a medio animar), y con
+`--timeout` captura antes de que cargue. Lo que funcionó en v0.8: un driver mínimo de DevTools
+Protocol en Node (trae `WebSocket` nativo) que lanza Edge con `--remote-debugging-port`, espera en
+tiempo real, manda teclas y clics, evalúa JS (`game.scene.getScene('PuzzleScene')`) y llama a
+`Page.captureScreenshot`. Para llegar a la pantalla de victoria, un DFS de pocas líneas evaluado en
+la página encuentra la solución en `optimo` pasos y la ejecuta con `_mover`.
 
 ---
 

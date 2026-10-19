@@ -1,6 +1,11 @@
 import GameState        from '../state/GameState.js';
 import Dev              from '../Dev.js';
 import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
+import Sonido           from '../Sonido.js';
+import {
+  CLAY, losa, boton, icono, estiloTexto, entrarEscena, irA,
+  respirar, sacudir, chispas, cartel, COLORES_FIESTA,
+} from '../ClayUI.js';
 import { TIENDA_CATS, itemsDe } from '../tienda.js';
 
 export default class StoreScene extends Phaser.Scene {
@@ -14,6 +19,7 @@ export default class StoreScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const W = width, H = height;
     this.isMobile = window.isMobile || false;
+    entrarEscena(this);
 
     // ── editor visual de la tienda (?editstore, sólo en desarrollo) ──
     this.editMode  = Dev.flag('editstore');
@@ -33,21 +39,16 @@ export default class StoreScene extends Phaser.Scene {
     this.editables.push({ nombre: 'saldo', x: this.layout.saldo.x, y: this.layout.saldo.y, objs: saldoObjs });
 
     // ── botón volver ──
-    const volver = () => this.scene.start('RoomScene');
-    const vb = this._botonClay(this.layout.volver.x, this.layout.volver.y, 76, 34, '← salir', 0xc88a4a);
-    vb.zone.on('pointerdown', () => { if (!this.editMode) volver(); });
-    this.editables.push({ nombre: 'volver', x: this.layout.volver.x, y: this.layout.volver.y, objs: [vb.g, vb.txt, vb.zone] });
+    const volver = () => irA(this, 'RoomScene');
+    const vb = boton(this, this.layout.volver.x, this.layout.volver.y, {
+      w: 58, fill: CLAY.azul, icono: 'casita', onTap: () => { if (!this.editMode) volver(); },
+    }).setDepth(20);
+    this.editables.push({ nombre: 'volver', x: this.layout.volver.x, y: this.layout.volver.y, objs: [vb] });
 
     // ── pestañas de categoría ──
     this.tabRefs = [];
     const tabsObjs = this._crearTabs(this.layout.tabs.x, this.layout.tabs.y);
     this.editables.push({ nombre: 'tabs', x: this.layout.tabs.x, y: this.layout.tabs.y, objs: tabsObjs });
-
-    // ── feedback de compra ──
-    this.feedbackTxt = this.add.text(W / 2, H - 14, '', {
-      fontSize: '13px', color: '#5a3a1a', fontFamily: FUENTE,
-      backgroundColor: '#f5e3b8', padding: { x: 10, y: 5 }
-    }).setOrigin(0.5, 1).setAlpha(0).setDepth(310);
 
     this.itemObjects = [];
     this._dibujarItems();
@@ -63,9 +64,9 @@ export default class StoreScene extends Phaser.Scene {
       shelfY:  [Math.round(0.245 * H), Math.round(0.515 * H), Math.round(0.785 * H)],
       shelfX0: Math.round(0.16 * W),
       shelfX1: Math.round(0.84 * W),
-      saldo:   { x: 78, y: 34 },
-      tabs:    { x: Math.round(W / 2), y: 34 },
-      volver:  { x: W - 52, y: 30 },
+      saldo:   { x: 100, y: 38 },
+      tabs:    { x: Math.round(W / 2) + 20, y: 38 },
+      volver:  { x: W - 44, y: 38 },
     };
   }
 
@@ -137,44 +138,21 @@ export default class StoreScene extends Phaser.Scene {
     });
   }
 
-  // ── helpers de estilo cálido ──
-  _tagRedondo(cx, cy, w, h, fill, stroke, r = 8) {
-    const g = this.add.graphics();
-    g.fillStyle(fill, 1); g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, r);
-    g.lineStyle(2, stroke, 1); g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, r);
-    return g;
-  }
-
-  // botón de plastilina: fondo redondo + texto + zona clickeable. devuelve {g, txt, zone}
-  _botonClay(cx, cy, w, h, label, fill) {
-    const g = this._tagRedondo(cx, cy, w, h, fill, 0x8a5a2a, 10);
-    const txt = this.add.text(cx, cy, label, {
-      fontSize: '12px', color: '#4a2e10', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    const zone = this.add.rectangle(cx, cy, w, h, 0xffffff, 0).setInteractive({ useHandCursor: true });
-    zone.on('pointerover', () => g.setAlpha(0.85));
-    zone.on('pointerout',  () => g.setAlpha(1));
-    return { g, txt, zone };
-  }
-
-  // panel de saldo anclado en (ax,ay) — devuelve sus objetos (para el editor)
+  // ── panel de saldo anclado en (ax,ay) — devuelve sus objetos (para el editor) ──
   _panelSaldo(ax, ay) {
-    const objs = [];
-    objs.push(this._tagRedondo(ax, ay, 140, 44, 0xf7e7bd, 0xcaa05a, 12));
+    const c = this.add.container(ax, ay).setDepth(20);
+    c.add(losa(this, 0, 0, 170, 54, { fill: CLAY.cremaClaro, r: 24, canto: 5, grosor: 3 }));
     const mk = SpriteConfig.get('ui', 'moneda');
-    if (mk && this.textures.exists(mk)) objs.push(this.add.image(ax - 50, ay, mk).setDisplaySize(26, 26));
-    else objs.push(this.add.text(ax - 58, ay, '🪙', { fontSize: '18px' }).setOrigin(0.5));
-    this.saldoTxt = this.add.text(ax - 32, ay - 6, '', {
-      fontSize: '15px', color: '#5a3a1a', fontFamily: FUENTE
-    }).setOrigin(0, 0.5);
-    objs.push(this.saldoTxt);
-    objs.push(this.add.text(ax + 18, ay - 6, '💡', { fontSize: '13px' }).setOrigin(0, 0.5));
-    this.pistasTxt = this.add.text(ax + 38, ay - 6, '', {
-      fontSize: '13px', color: '#7a5a2a', fontFamily: FUENTE
-    }).setOrigin(0, 0.5);
-    objs.push(this.pistasTxt);
+    if (mk && this.textures.exists(mk)) c.add(this.add.image(-60, -3, mk).setDisplaySize(36, 36));
+    this.saldoTxt = this.add.text(-38, -3, '', estiloTexto(22, '#ffd54a', '#8a5a10', 5)).setOrigin(0, 0.5);
+    c.add(this.saldoTxt);
+    const pk = SpriteConfig.get('ui', 'pista');
+    if (pk && this.textures.exists(pk)) c.add(this.add.image(36, -3, pk).setDisplaySize(30, 30));
+    this.pistasTxt = this.add.text(54, -3, '', estiloTexto(20, '#ffffff', '#5a7a2a', 4)).setOrigin(0, 0.5);
+    c.add(this.pistasTxt);
+    this.saldoBox = c;
     this._refrescarSaldo();
-    return objs;
+    return [c];
   }
 
   _refrescarSaldo() {
@@ -182,26 +160,26 @@ export default class StoreScene extends Phaser.Scene {
     if (this.pistasTxt) this.pistasTxt.setText(`${GameState.pistas}`);
   }
 
-  // ── pestañas — fila centrada en (cx, y); devuelve sus objetos ──
+  // ── pestañas — sólo iconos; la activa es amarilla y más grande ──
   _crearTabs(cx, y) {
-    const n = TIENDA_CATS.length;
-    const tabW = 78, gap = 8;
-    const totalW = n * tabW + (n - 1) * gap;
-    const startX = cx - totalW / 2 + tabW / 2;
+    const iconos = {
+      energia: { imagen: 'energia' },
+      niveles: { icono: 'mapa' },
+      mejoras: { imagen: 'pista' },
+      muebles: { imagen: SpriteConfig.get('muebles', 'sillon') || 'sillon' },
+    };
+    const n = TIENDA_CATS.length, paso = 78;
     const objs = [];
-
     TIENDA_CATS.forEach((cat, i) => {
-      const x = startX + i * (tabW + gap);
+      const x = cx + (i - (n - 1) / 2) * paso;
       const activa = cat.id === this.catActiva;
-      const g = this._tagRedondo(x, y, tabW, 30, activa ? 0xffe9a8 : 0xead8a8,
-        activa ? 0xc88a3a : 0xbfa878, 9);
-      const txt = this.add.text(x, y, `${cat.icono} ${cat.label}`, {
-        fontSize: '11px', color: activa ? '#6a4010' : '#9a8458', fontFamily: FUENTE
-      }).setOrigin(0.5);
-      const zone = this.add.rectangle(x, y, tabW, 30, 0xffffff, 0).setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => { if (!this.editMode && cat.id !== this.catActiva) { this.catActiva = cat.id; this._cambiarTab(); } });
-      this.tabRefs.push({ cat, g, txt });
-      objs.push(g, txt, zone);
+      const b = boton(this, x, y, {
+        w: activa ? 68 : 58, fill: activa ? CLAY.amarillo : CLAY.cremaClaro,
+        colorIcono: activa ? 0xffffff : CLAY.bordeOscuro, ...iconos[cat.id],
+        onTap: () => { if (!this.editMode && cat.id !== this.catActiva) { this.catActiva = cat.id; this._cambiarTab(); } },
+      }).setDepth(20);
+      if (!activa) b.setAlpha(0.85);
+      objs.push(b);
     });
     return objs;
   }
@@ -213,7 +191,7 @@ export default class StoreScene extends Phaser.Scene {
 
   // ── items sobre los estantes ──
   _dibujarItems() {
-    this.itemObjects.forEach(o => o.destroy());
+    this.itemObjects.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
     this.itemObjects = [];
 
     const items = itemsDe(this.catActiva);
@@ -227,9 +205,9 @@ export default class StoreScene extends Phaser.Scene {
     estantes.forEach((lista, s) => {
       const k = lista.length;
       if (!k) return;
-      const slot = Math.min(190, span / k);
+      const slot = Math.min(200, span / k);
       const startX = cxMid - (slot * k) / 2 + slot / 2;
-      lista.forEach((it, j) => this._itemEnEstante(it, startX + j * slot, this.shelfY[s]));
+      lista.forEach((it, j) => this._itemEnEstante(it, startX + j * slot, this.shelfY[s], slot));
     });
   }
 
@@ -241,77 +219,114 @@ export default class StoreScene extends Phaser.Scene {
     return { cls: 'comprable' };
   }
 
-  _itemEnEstante(item, cx, shelfTopY) {
-    const st = this._estado(item);
+  // Dibujo del producto, apoyado sobre el estante. Devuelve un Container.
+  // Lo que se compra se tiene que entender MIRANDO: un mueble es su dibujo, un
+  // tablero es un tablerito con sus fichas, la energía es la pila con "+3".
+  _dibujoItem(item, cx, baseY, tam) {
+    const c = this.add.container(cx, baseY - tam / 2);
+    const img = (key, s = tam) => {
+      if (key && this.textures.exists(key)) { c.add(this.add.image(0, 0, key).setDisplaySize(s, s)); return true; }
+      return false;
+    };
+    const mas = (n) => c.add(this.add.text(tam * 0.32, tam * 0.28, `+${n}`, estiloTexto(24, '#ffffff', '#5a3a1a', 6)).setOrigin(0.5));
 
-    // ícono apoyado sobre el estante
-    const icoY = shelfTopY - 30;
-    const ico = SpriteConfig.colocar(this, 'muebles', item.mueble, cx, icoY,
-      () => this.add.text(cx, icoY, item.icono, { fontSize: '36px' }).setOrigin(0.5));
-    if (ico) {
-      if (item.mueble && ico.setDisplaySize) ico.setDisplaySize(54, 54);
-      if (st.cls === 'proximamente') ico.setAlpha(0.45);
-      this.itemObjects.push(ico);
+    if (item.mueble) {
+      if (!img(SpriteConfig.get('muebles', item.mueble), tam * 1.15)) c.add(this.add.text(0, 0, item.icono, { fontSize: `${tam * 0.6}px` }).setOrigin(0.5));
+    } else if (item.tipo === 'energia') {
+      img(SpriteConfig.get('ui', 'energia'), tam * 0.85); mas(item.cantidad);
+    } else if (item.tipo === 'pista') {
+      img(SpriteConfig.get('ui', 'pista'), tam * 0.85); mas(item.cantidad);
+    } else if (item.tipo === 'pack' && (item.pack === 'tablero6' || item.pack === 'expertos')) {
+      // tablerito de madera con N×N fichas de masa
+      const N = item.pack === 'tablero6' ? 6 : 8;
+      const W = tam * 0.95;
+      c.add(losa(this, 0, 0, W, W + 6, { fill: CLAY.madera, r: 12, canto: 6, grosor: 3, brillo: 0.15 }));
+      const g = this.add.graphics();
+      const m = 7, cel = (W - m * 2) / N;
+      for (let r = 0; r < N; r++) for (let q = 0; q < N; q++) {
+        g.fillStyle(CLAY.ficha, 1);
+        g.fillRoundedRect(-W / 2 + m + q * cel + 1, -W / 2 - 3 + m + r * cel + 1, cel - 2, cel - 2, Math.min(3, cel * 0.25));
+      }
+      c.add(g);
+      c.add(this.add.text(0, -3, `${N}`, estiloTexto(30, '#ffffff', '#8a5a2a', 7)).setOrigin(0.5));
+    } else {
+      c.add(this.add.text(0, 0, item.icono, { fontSize: `${tam * 0.6}px` }).setOrigin(0.5));
     }
+    return c;
+  }
 
-    // cartelito de plastilina sobre el frente del estante
-    const tagW = 124, tagH = 36, tagY = shelfTopY + 18;
-    let fill = 0xf3e0ad, stroke = 0xb98a4a, infoTxt, infoCol = '#5a3a1a';
-    if (st.cls === 'comprado')      { fill = 0xc9e6a8; stroke = 0x6fa84a; infoTxt = '✓ tuyo'; infoCol = '#3c6a1e'; }
-    else if (st.cls === 'proximamente') { fill = 0xddd2bb; stroke = 0xb0a488; infoTxt = '🔒 pronto'; infoCol = '#8a7a58'; }
-    else if (st.cls === 'sinSaldo') { infoTxt = `🪙 ${item.precio}`; infoCol = '#c0492a'; }
-    else                            { infoTxt = `🪙 ${item.precio}`; infoCol = '#7a5a10'; }
+  _itemEnEstante(item, cx, shelfTopY, slot) {
+    const st = this._estado(item);
+    const tam = Math.min(104, slot * 0.7);
 
-    this.itemObjects.push(this._tagRedondo(cx, tagY, tagW, tagH, fill, stroke, 9));
-    this.itemObjects.push(this.add.text(cx, tagY - 8, item.nombre, {
-      fontSize: '10px', color: '#4a2e10', fontFamily: FUENTE
+    const dib = this._dibujoItem(item, cx, shelfTopY - 2, tam);
+    if (st.cls === 'proximamente') dib.setAlpha(0.4);
+    this.itemObjects.push(dib);
+
+    // etiqueta colgando del frente del estante: moneda + precio (o tilde / candado)
+    const tagY = shelfTopY + 24;
+    const fill = st.cls === 'comprado' ? CLAY.okFill : st.cls === 'proximamente' ? CLAY.offFill : CLAY.cremaClaro;
+    const tagW = Math.min(104, slot - 8);
+    const tag = this.add.container(cx, tagY);
+    tag.add(losa(this, 0, 0, tagW, 44, { fill, r: 18, canto: 5, grosor: 3 }));
+    if (st.cls === 'comprado') {
+      tag.add(icono(this, 0, -3, 'check', 28, 0x4a8a34));
+    } else if (st.cls === 'proximamente') {
+      const lk = SpriteConfig.get('ui', 'candado');
+      if (lk && this.textures.exists(lk)) tag.add(this.add.image(0, -3, lk).setDisplaySize(28, 28));
+    } else {
+      const mk = SpriteConfig.get('ui', 'moneda');
+      if (mk && this.textures.exists(mk)) tag.add(this.add.image(-tagW / 2 + 22, -3, mk).setDisplaySize(24, 24));
+      tag.add(this.add.text(-tagW / 2 + 38, -3, `${item.precio}`, estiloTexto(tagW < 100 ? 17 : 19,
+        st.cls === 'sinSaldo' ? '#f0a090' : '#ffd54a', st.cls === 'sinSaldo' ? '#8a3a2a' : '#8a5a10', 4)).setOrigin(0, 0.5));
+      if (st.cls === 'sinSaldo') tag.setAlpha(0.8);
+    }
+    this.itemObjects.push(tag);
+
+    // nombre chiquito para el adulto
+    this.itemObjects.push(this.add.text(cx, tagY + 30, item.nombre, {
+      fontSize: '11px', color: '#fff6e0', fontFamily: FUENTE, stroke: '#5a3a1a', strokeThickness: 3,
     }).setOrigin(0.5));
 
-    // info: precio con moneda-imagen (plastilina), o estado (✓ tuyo / 🔒 pronto)
-    if (st.cls === 'comprable' || st.cls === 'sinSaldo') {
-      const mk = SpriteConfig.get('ui', 'moneda');
-      if (mk && this.textures.exists(mk)) {
-        this.itemObjects.push(this.add.image(cx - 14, tagY + 8, mk).setDisplaySize(16, 16));
-      } else {
-        this.itemObjects.push(this.add.text(cx - 14, tagY + 8, '🪙', { fontSize: '13px' }).setOrigin(0.5));
-      }
-      this.itemObjects.push(this.add.text(cx - 2, tagY + 8, `${item.precio}`, {
-        fontSize: '12px', color: infoCol, fontFamily: FUENTE
-      }).setOrigin(0, 0.5));
-    } else {
-      this.itemObjects.push(this.add.text(cx, tagY + 8, infoTxt, {
-        fontSize: '11px', color: infoCol, fontFamily: FUENTE
-      }).setOrigin(0.5));
-    }
+    // lo comprable respira: "¡esto lo podés llevar!"
+    if (st.cls === 'comprable') respirar(this, dib, 0.04, 800 + Math.random() * 300);
 
-    // zona clickeable (ícono + cartel) solo si se puede comprar
-    if (st.cls === 'comprable') {
-      const top = icoY - 30, bot = tagY + tagH / 2;
-      const zone = this.add.rectangle(cx, (top + bot) / 2, tagW, bot - top, 0xffffff, 0)
+    // zona clickeable (dibujo + etiqueta)
+    if (st.cls === 'comprable' || st.cls === 'sinSaldo') {
+      const top = shelfTopY - tam - 8, bot = tagY + 22;
+      const zone = this.add.rectangle(cx, (top + bot) / 2, Math.max(110, tam), bot - top, 0xffffff, 0)
         .setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => this._comprar(item));
-      zone.on('pointerover', () => ico && ico.setScale && ico.setScale(ico.scaleX * 1.08));
+      zone.on('pointerdown', () => this._comprar(item, dib, tag));
       this.itemObjects.push(zone);
     }
   }
 
-  _comprar(item) {
+  _comprar(item, dib, tag) {
     if (this.editMode) return;   // en el editor no se compra
     if (GameState.comprar(item)) {
-      this._refrescarSaldo();
-      this._dibujarItems();
-      let extra = '';
-      if (item.tipo === 'energia') extra = ` (+${item.cantidad} niveles hoy)`;
-      else if (item.tipo === 'pista') extra = ` (+${item.cantidad} pistas)`;
-      this._feedback(`✓ compraste ${item.nombre}${extra}`, '#3c6a1e');
+      Sonido.moneda();
+      this.time.delayedCall(140, () => Sonido.victoria());
+      // las monedas vuelan del saldo al producto
+      const mk = SpriteConfig.get('ui', 'moneda');
+      for (let i = 0; i < 6 && mk && this.textures.exists(mk); i++) {
+        const m = this.add.image(this.saldoBox.x - 60, this.saldoBox.y, mk).setDisplaySize(26, 26).setDepth(300);
+        this.tweens.add({ targets: m, x: dib.x, y: dib.y, duration: 420, delay: i * 50, ease: 'Quad.easeIn',
+          onComplete: () => m.destroy() });
+      }
+      this.time.delayedCall(480, () => {
+        if (!this.scene.isActive()) return;
+        chispas(this, dib.x, dib.y, COLORES_FIESTA, { cantidad: 26, velocidad: 180, depth: 300 });
+        this._refrescarSaldo();
+        this._dibujarItems();
+      });
     } else {
-      this._feedback('no tienes monedas suficientes', '#c0492a');
+      Sonido.error();
+      sacudir(this, tag);
+      sacudir(this, this.saldoBox, 5);
     }
   }
 
   _feedback(msg, color) {
-    this.feedbackTxt.setText(msg).setColor(color).setAlpha(1);
-    this.tweens.killTweensOf(this.feedbackTxt);
-    this.tweens.add({ targets: this.feedbackTxt, alpha: 0, delay: 1600, duration: 500 });
+    cartel(this, this.scale.width / 2, this.scale.height - 40, msg, { color });
   }
 }

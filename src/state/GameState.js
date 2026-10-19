@@ -45,6 +45,12 @@ const GameState = {
     return !!this.username;
   },
 
+  // la primera vez que entra un perfil, el chico elige con quién juega (LoginScene)
+  elegirPersonaje(personaje) {
+    this.personaje = personaje === 'nina' ? 'nina' : 'nino';
+    this._guardar();
+  },
+
   // ── economía ──
   // Las monedas dependen SOLO de las estrellas, no del puntaje. Antes eran iguales
   // al puntaje (300 - movimientos*5), y con esa fórmula jugar mal rendía el 84% de
@@ -218,6 +224,13 @@ const GameState = {
   },
 
   _cargarPerfil() {
+    // Partir siempre de cero: sin esto, al cerrar sesión y entrar con un perfil NUEVO
+    // se heredaba en memoria el progreso del perfil anterior (y se guardaba como propio).
+    Object.assign(this, {
+      personaje: 'nino', puntosTotal: 0, mejorPuntaje: {}, estrellas: {}, tiempos: {},
+      monedas: 0, desbloqueos: [], energiaExtraHoy: 0, pistas: 3,
+      nivelesCompletados: [], ultimoNivelDesbloqueado: 0, fechaHoy: null, nivelesHoy: 0,
+    });
     const raw = localStorage.getItem(this._clave());
     if (!raw) return;
     try {

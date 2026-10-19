@@ -1,7 +1,22 @@
 import GameState    from '../state/GameState.js';
 import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
-import { CLAY, tagRedondo, panelClay, botonClay, estrellas } from '../ClayUI.js';
+import Sonido       from '../Sonido.js';
+import {
+  CLAY, losa, boton, estrella, estiloTexto, hex, oscurecer, aclarar,
+  entrarEscena, irA, respirar, sacudir, cartel,
+} from '../ClayUI.js';
 import { LEVELS, TIERS, packRequerido } from '../levels.js';
+
+// Selector de niveles como MAPA: cada nivel es una piedra redonda con su número,
+// unidas por un caminito que serpentea (una fila va a la derecha, la siguiente
+// vuelve). Antes era una lista de tarjetas con títulos y subtítulos ("conectar
+// batería → resistencia → LED"): un temario, no un juego.
+//
+// Estados de cada piedra, leídos por color y no por texto:
+//   verde + estrellas  = hecho
+//   naranja latiendo   = el que toca (con el personaje parado arriba)
+//   naranja            = disponible
+//   gris + candado     = todavía no
 
 export default class LevelSelectScene extends Phaser.Scene {
   constructor() { super('LevelSelectScene'); }
@@ -14,138 +29,107 @@ export default class LevelSelectScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.W = width; this.H = height;
     this.isMobile = window.isMobile || false;
+    entrarEscena(this);
 
     // fondo: el mapa de plastilina
     SpriteConfig.fondo(this, 'select', width, height, 0xc8763f);   // fallback terracota
 
-    this.HUD_H = this.isMobile ? 34 : 44;
-
-    // Sin hoja de fondo: cada tier trae su propio panel, así el mapa se ve entre medio.
+    this.HUD_H = 76;
 
     // ── contenido scrolleable ──
     this.contenedor = this.add.container(0, 0);
     this._construirContenido();
 
     // ── barra fija arriba (por encima del contenido) ──
-    this.add.rectangle(0, 0, width, this.HUD_H, CLAY.crema, 0.98).setOrigin(0);
-    this.add.rectangle(0, this.HUD_H, width, 2, CLAY.bordeOscuro).setOrigin(0);
-    this.add.text(12, this.HUD_H / 2, '🗺️  niveles', {
-      fontSize: this.isMobile ? '14px' : '16px', color: CLAY.txt, fontFamily: FUENTE
-    }).setOrigin(0, 0.5);
+    const barra = this.add.graphics().setDepth(40);
+    barra.fillStyle(0x3a2410, 0.25); barra.fillRect(0, this.HUD_H - 2, width, 6);
+    barra.fillStyle(CLAY.crema, 0.97); barra.fillRect(0, 0, width, this.HUD_H - 4);
+    barra.fillStyle(CLAY.borde, 1);    barra.fillRect(0, this.HUD_H - 6, width, 4);
 
     const volver = () => {
-      if (this.desde !== null) this.scene.start('PuzzleScene', { nivelIdx: this.desde });
-      else this.scene.start('RoomScene');
+      if (this.desde !== null) irA(this, 'PuzzleScene', { nivelIdx: this.desde });
+      else irA(this, 'RoomScene');
     };
-    const vb = botonClay(this, width - 52, this.HUD_H / 2, 76, 28, '← salir');
-    vb.zone.on('pointerdown', volver);
+    boton(this, 42, 36, { w: 58, fill: CLAY.azul, icono: this.desde !== null ? 'atras' : 'casita', onTap: volver }).setDepth(41);
 
-    // toast de feedback
-    this.toastTxt = this.add.text(width / 2, height - 12, '', {
-      fontSize: '12px', color: CLAY.txt, fontFamily: FUENTE,
-      backgroundColor: '#f5e3b8', padding: { x: 10, y: 5 }
-    }).setOrigin(0.5, 1).setAlpha(0).setDepth(50);
+    // total de estrellas: lo único "numérico" del mapa, y va con su icono
+    const tot = this.add.container(width / 2, 34).setDepth(41);
+    tot.add(losa(this, 0, 0, 150, 52, { fill: CLAY.cremaClaro, r: 22, canto: 5, grosor: 3 }));
+    tot.add(estrella(this, -44, -3, true, 38));
+    tot.add(this.add.text(-18, -3, `${GameState.totalEstrellas()}`, estiloTexto(24, '#ffffff', '#8a5a10', 5)).setOrigin(0, 0.5));
 
+    this.input.keyboard.on('keydown-ESC', volver);
     this._initScroll();
+    this._scrollAlActual();
   }
 
-  // ── construir tiers + conceptos + tarjetas ──
-  // Cada tier es un panel de plastilina que envuelve su contenido; entre panel y
-  // panel se ve el mapa del fondo. Las tarjetas van en grilla ocupando todo el ancho.
+  // ── construir tiers con su caminito de piedras ──
   _construirContenido() {
-    const M = this.isMobile ? 8 : 22;         // margen exterior (lo que deja ver el mapa)
-    const P = this.isMobile ? 10 : 16;        // padding interno del panel
-    const G = this.isMobile ? 8 : 12;         // separación entre tarjetas
-
-    this.cardH = this.isMobile ? 76 : 72;
+    const M = 22;                 // margen exterior (lo que deja ver el mapa)
+    const P = 18;                 // padding interno del panel
+    this.NODO   = 74;             // diámetro de cada piedra
+    this.FILA_H = 128;            // alto de cada fila (piedra + estrellas + aire)
     const anchoUtil = this.W - M * 2 - P * 2;
+    this.porFila = Math.max(3, Math.floor(anchoUtil / 118));
+    this.pasoX   = anchoUtil / this.porFila;
 
-    // Cuántas tarjetas entran por fila, repartiendo el sobrante para llenar el ancho.
-    // La resolución lógica es 800x600 siempre: en móvil la pantalla es físicamente más
-    // chica, así que ahí las tarjetas van MÁS grandes (manos chiquitas), no más chicas.
-    const cardMin = this.isMobile ? 205 : 170;
-    this.perRow = Math.max(1, Math.floor((anchoUtil + G) / (cardMin + G)));
-    this.cardW  = (anchoUtil - G * (this.perRow - 1)) / this.perRow;
-
-    let y = this.HUD_H + 14;
+    let y = this.HUD_H + 18;
+    this.nodoActualY = null;
 
     TIERS.forEach(tier => {
-      const alto = this._altoDeTier(tier, P, G);
+      const niveles = tier.conceptos.flatMap(c => c.niveles);
+      const proximamente = tier.conceptos.some(c => c.proximamente && c.niveles.length === 0);
+      const n = niveles.length + (proximamente ? 1 : 0);
+      const filas = Math.ceil(n / this.porFila);
+      const cintaH = 40;
+      const alto = P + cintaH + 14 + filas * this.FILA_H + P - 18;
 
-      // panel del tier (con sombra) — se dibuja antes que su contenido
-      this.contenedor.add(panelClay(this, this.W / 2, y + alto / 2, this.W - M * 2, alto,
-        CLAY.cremaClaro, CLAY.borde, 16, 0.92));
+      // panel del tier
+      this.contenedor.add(losa(this, this.W / 2, y + alto / 2, this.W - M * 2, alto,
+        { fill: CLAY.cremaClaro, borde: CLAY.borde, r: 28, canto: 8, grosor: 4, brillo: 0.12 }));
 
+      // cinta con el color del tier (el nombre queda para el adulto)
+      const cinta = losa(this, this.W / 2, y + P + cintaH / 2, this.W - M * 2 - P * 2, cintaH,
+        { fill: tier.color, r: 18, canto: 5, grosor: 3, sombra: 0 });
+      this.contenedor.add(cinta);
+      this.contenedor.add(this.add.text(this.W / 2, y + P + cintaH / 2 - 3, tier.nombre.toLowerCase(),
+        estiloTexto(18, '#ffffff', hex(oscurecer(tier.color, 0.45)), 4)).setOrigin(0.5));
+
+      // posiciones en zigzag: fila par →, fila impar ←
       const x0 = M + P;
-      let cy = y + P;
+      const yFilas = y + P + cintaH + 14;
+      const pos = [];
+      for (let i = 0; i < n; i++) {
+        const fila = Math.floor(i / this.porFila);
+        let col = i % this.porFila;
+        if (fila % 2 === 1) col = this.porFila - 1 - col;
+        pos.push({ x: x0 + this.pasoX * col + this.pasoX / 2, y: yFilas + fila * this.FILA_H + this.NODO / 2 + 4 });
+      }
 
-      // cinta del tier: color saturado, con el nombre en blanco
-      const cintaH = this.isMobile ? 28 : 32;
-      this.contenedor.add(tagRedondo(this, this.W / 2, cy + cintaH / 2,
-        this.W - M * 2 - P * 2, cintaH, tier.color, tier.color, 10, 0.9));
-      this.contenedor.add(this.add.text(this.W / 2, cy + cintaH / 2, tier.nombre.toLowerCase(), {
-        fontSize: this.isMobile ? '15px' : '17px', color: '#ffffff', fontFamily: FUENTE,
-        stroke: '#00000033', strokeThickness: 2
-      }).setOrigin(0.5));
-      cy += cintaH + (this.isMobile ? 10 : 14);
-
-      tier.conceptos.forEach(con => {
-        this.contenedor.add(this.add.text(x0, cy, con.nombre, {
-          fontSize: this.isMobile ? '13px' : '14px', color: CLAY.txt, fontFamily: FUENTE
-        }).setOrigin(0, 0));
-        this.contenedor.add(this.add.text(x0, cy + (this.isMobile ? 16 : 18), con.aprende, {
-          fontSize: this.isMobile ? '9px' : '10px', color: CLAY.txtSuave, fontFamily: FUENTE
-        }).setOrigin(0, 0));
-        cy += this.isMobile ? 32 : 36;
-
-        if (con.proximamente && con.niveles.length === 0) {
-          cy += this._chipProximamente(x0, cy) + G;
-        } else {
-          con.niveles.forEach((idx, i) => {
-            const col = i % this.perRow, fila = Math.floor(i / this.perRow);
-            this._crearTarjeta(idx,
-              x0 + col * (this.cardW + G),
-              cy + fila * (this.cardH + G),
-              this.cardW, this.cardH);
-          });
-          const filas = Math.ceil(con.niveles.length / this.perRow);
-          cy += filas * (this.cardH + G) - G + (this.isMobile ? 10 : 14);
+      // caminito de piedritas entre nodos (debajo de todo)
+      const camino = this.add.graphics();
+      for (let i = 0; i < n - 1; i++) {
+        const a = pos[i], b = pos[i + 1];
+        const L = Math.hypot(b.x - a.x, b.y - a.y);
+        const pasos = Math.max(2, Math.floor(L / 16));
+        for (let k = 1; k < pasos; k++) {
+          const t = k / pasos;
+          // la vuelta entre filas se curva un poco hacia afuera
+          const curva = (a.y !== b.y) ? Math.sin(t * Math.PI) * 26 * (a.x > this.W / 2 ? 1 : -1) : 0;
+          const px = a.x + (b.x - a.x) * t + curva, py = a.y + (b.y - a.y) * t;
+          camino.fillStyle(oscurecer(CLAY.borde, 0.8), 1); camino.fillCircle(px, py + 2, 4.5);
+          camino.fillStyle(CLAY.crema, 1);                 camino.fillCircle(px, py, 4.5);
         }
-      });
+      }
+      this.contenedor.add(camino);
 
-      y += alto + (this.isMobile ? 12 : 18);
+      niveles.forEach((idx, i) => this._crearNodo(idx, pos[i].x, pos[i].y));
+      if (proximamente) this._nodoProximamente(pos[n - 1].x, pos[n - 1].y);
+
+      y += alto + 22;
     });
 
     this.contentBottom = y;
-  }
-
-  // alto exacto que va a ocupar un tier — se necesita ANTES de dibujarlo,
-  // porque el panel se dibuja debajo de su propio contenido.
-  _altoDeTier(tier, P, G) {
-    let h = P * 2 + (this.isMobile ? 28 : 32) + (this.isMobile ? 10 : 14);   // padding + cinta
-    tier.conceptos.forEach(con => {
-      h += this.isMobile ? 32 : 36;                                          // nombre + "aprendés"
-      if (con.proximamente && con.niveles.length === 0) {
-        h += (this.isMobile ? 30 : 32) + G;
-      } else {
-        const filas = Math.ceil(con.niveles.length / this.perRow);
-        h += filas * (this.cardH + G) - G + (this.isMobile ? 10 : 14);
-      }
-    });
-    return h;
-  }
-
-  // chip "próximamente" con candado. Devuelve su alto.
-  _chipProximamente(x, y) {
-    const w = 132, h = this.isMobile ? 30 : 32;
-    const objs = [tagRedondo(this, x + w / 2, y + h / 2, w, h, CLAY.offFill, CLAY.offBorde, 10)];
-    const lk = SpriteConfig.colocar(this, 'ui', 'candado', x + 18, y + h / 2, null);
-    if (lk) objs.push(lk.setDisplaySize(16, 16));
-    objs.push(this.add.text(x + (lk ? 32 : 14), y + h / 2, 'próximamente', {
-      fontSize: '11px', color: CLAY.txtOff, fontFamily: FUENTE
-    }).setOrigin(0, 0.5));
-    this.contenedor.add(objs);
-    return h;
   }
 
   _estadoNivel(idx) {
@@ -157,67 +141,74 @@ export default class LevelSelectScene extends Phaser.Scene {
     return { desbloqueado, pack, packOk, completado, estrellas, jugable: desbloqueado && packOk };
   }
 
-  _crearTarjeta(idx, x, y, w, h) {
+  _crearNodo(idx, x, y) {
     const lvl = LEVELS[idx];
     if (!lvl) return;
     const st = this._estadoNivel(idx);
+    const esActual = st.jugable && !st.completado && idx === GameState.ultimoNivelDesbloqueado;
+    const D = this.NODO;
 
-    // tarjeta de plastilina: bloqueada (beige), completada (verde) o disponible (crema)
-    const fill   = !st.jugable ? CLAY.offFill  : st.completado ? CLAY.okFill  : CLAY.crema;
-    const stroke = !st.jugable ? CLAY.offBorde : st.completado ? CLAY.okBorde : CLAY.borde;
-    const txtCol = !st.jugable ? CLAY.txtOff   : st.completado ? CLAY.txtOk   : CLAY.txt;
-
-    const cx = x + w / 2, cy = y + h / 2;
-    const [sombra, cuerpo] = panelClay(this, cx, cy, w, h, fill, stroke, 12);
-    const zona = this.add.rectangle(cx, cy, w, h, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true });
-
-    const nombre = this.add.text(x + 12, y + 12, lvl.name, {
-      fontSize: this.isMobile ? '12px' : '13px',
-      color: txtCol, fontFamily: FUENTE,
-      wordWrap: { width: w - 34 }
-    }).setOrigin(0, 0);
-
-    // los que se levantan al pasar por encima (la sombra se queda quieta)
-    const movibles = [cuerpo, nombre];
+    const fill = !st.jugable ? CLAY.offFill : st.completado ? CLAY.verde : CLAY.naranja;
+    const b = boton(this, x, y, {
+      w: D, fill, texto: st.jugable ? `${idx + 1}` : null, tamTexto: 28,
+      icono: null, sonido: st.jugable ? 'pop' : null,
+      permitir: () => !this._dragMoved,
+      onTap: () => this._jugar(idx, b),
+    });
+    this.contenedor.add(b);
 
     if (!st.jugable) {
-      const lk = SpriteConfig.colocar(this, 'ui', 'candado', x + w - 20, y + 20, null);
-      movibles.push(lk ? lk.setDisplaySize(22, 22)
-                       : this.add.text(x + w - 12, y + 12, '🔒', { fontSize: '15px' }).setOrigin(1, 0));
-    } else {
-      movibles.push(...estrellas(this, x + 12, y + h - 16, st.estrellas, 17));
+      const lk = SpriteConfig.get('ui', 'candado');
+      if (lk && this.textures.exists(lk)) b.add(this.add.image(0, -4, lk).setDisplaySize(D * 0.5, D * 0.5));
+      else b.add(this.add.text(0, -4, '🔒', { fontSize: '26px' }).setOrigin(0.5));
+    } else if (st.completado) {
+      // estrellas en arco debajo de la piedra
+      for (let i = 0; i < 3; i++) {
+        const sx = x + (i - 1) * 24, sy = y + D / 2 + 10 - (i === 1 ? 4 : 0);
+        this.contenedor.add(estrella(this, sx, sy, i < st.estrellas, 24));
+      }
     }
 
-    // posición base de cada uno, para que el hover sea absoluto y no acumule
-    const baseY = movibles.map(o => o.y);
-    const alzar = dy => movibles.forEach((o, i) => o.setY(baseY[i] + dy));
-
-    zona.on('pointerup',   () => { if (!this._dragMoved) this._jugar(idx); });
-    zona.on('pointerover', () => alzar(-3));
-    zona.on('pointerout',  () => alzar(0));
-
-    this.contenedor.add([sombra, cuerpo, zona, ...movibles.slice(1)]);
+    if (esActual) {
+      this.nodoActualY = y;
+      respirar(this, b, 0.07, 650);
+      // el personaje del chico parado sobre "su" nivel
+      const pose = SpriteConfig.pose(GameState.personaje || 'nino', 'abajo');
+      if (pose && this.textures.exists(pose.key)) {
+        const pj = this.add.image(x + D * 0.42, y - D * 0.32, pose.key).setOrigin(0.5, pose.anclaY);
+        pj.setScale(62 / pose.altoFigura);
+        this.contenedor.add(pj);
+        this.tweens.add({ targets: pj, y: pj.y - 8, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
   }
 
-  _jugar(idx) {
+  _nodoProximamente(x, y) {
+    const D = this.NODO;
+    const g = losa(this, x, y, D, D, { fill: CLAY.offFill, r: D / 2, canto: 6, grosor: 3 }).setAlpha(0.7);
+    this.contenedor.add(g);
+    this.contenedor.add(this.add.text(x, y - 4, '?', estiloTexto(30, '#ffffff', hex(CLAY.offBorde), 4)).setOrigin(0.5));
+  }
+
+  _jugar(idx, nodo) {
     const st = this._estadoNivel(idx);
-    if (!st.desbloqueado) { this._toast('completá los niveles anteriores', CLAY.txt); return; }
+    if (!st.desbloqueado) {
+      Sonido.error(); sacudir(this, nodo);
+      return;
+    }
     if (!st.packOk) {
-      this._toast('desbloqueá el pack en la tienda 🛒', CLAY.txt);
-      this.time.delayedCall(900, () => this.scene.start('StoreScene', { cat: 'niveles' }));
+      // tablero sin comprar: a la tienda, a la pestaña de tableros
+      Sonido.error(); sacudir(this, nodo);
+      cartel(this, this.W / 2, this.H - 50, '🔒 → 🛒');
+      this.time.delayedCall(800, () => irA(this, 'StoreScene', { cat: 'niveles' }));
       return;
     }
     if (!st.completado && !GameState.puedeJugarHoy()) {
-      this._toast('ya completaste tus niveles de hoy', '#c0492a'); return;
+      Sonido.error(); sacudir(this, nodo);
+      cartel(this, this.W / 2, this.H - 50, '🌙  ¡mañana más!');
+      return;
     }
-    this.scene.start('PuzzleScene', { nivelIdx: idx });
-  }
-
-  _toast(msg, color) {
-    this.toastTxt.setText(msg).setColor(color).setAlpha(1);
-    this.tweens.killTweensOf(this.toastTxt);
-    this.tweens.add({ targets: this.toastTxt, alpha: 0, delay: 1500, duration: 500 });
+    irA(this, 'PuzzleScene', { nivelIdx: idx });
   }
 
   // ── scroll (rueda + arrastre + flechas) ──
@@ -232,18 +223,22 @@ export default class LevelSelectScene extends Phaser.Scene {
     this.input.on('pointermove', p => {
       if (!down) return;
       const d = p.y - startY;
-      if (Math.abs(d) > 6) this._dragMoved = true;
-      this._scrollTo(baseY + d);
+      if (Math.abs(d) > 8) this._dragMoved = true;
+      if (this._dragMoved) this._scrollTo(baseY + d);
     });
     this.input.on('pointerup', () => { down = false; });
 
-    const cursors = this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown-DOWN', () => this._scrollTo(this.contenedor.y - 40));
-    this.input.keyboard.on('keydown-UP',   () => this._scrollTo(this.contenedor.y + 40));
-    this.cursors = cursors;
+    this.input.keyboard.on('keydown-DOWN', () => this._scrollTo(this.contenedor.y - 60));
+    this.input.keyboard.on('keydown-UP',   () => this._scrollTo(this.contenedor.y + 60));
   }
 
   _scrollTo(yy) {
     this.contenedor.y = Phaser.Math.Clamp(yy, -this.maxScroll, 0);
+  }
+
+  // arrancar mostrando el nivel que toca, no siempre el principio
+  _scrollAlActual() {
+    if (this.nodoActualY === null) return;
+    this._scrollTo(-(this.nodoActualY - this.H / 2));
   }
 }

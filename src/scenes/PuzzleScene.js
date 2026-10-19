@@ -1,6 +1,21 @@
 import GameState    from '../state/GameState.js';
 import SpriteConfig, { FUENTE } from '../SpriteConfig.js';
+import Sonido       from '../Sonido.js';
 import { LEVELS, packRequerido } from '../levels.js';
+import {
+  CLAY, losa, boton, insignia, botonSonido, estrella, estiloTexto, hex, oscurecer, aclarar,
+  entrarEscena, irA, confeti, chispas, asegurarTexturas, aparecer, respirar, sacudir, COLORES_FIESTA,
+} from '../ClayUI.js';
+
+// Colores de la serpiente de plastilina (combinan con assets/snake_head.png)
+const SERP = { cuerpo: 0x6cbf54, contorno: 0x3d7a33, energia: 0xffe45c };
+
+// Profundidades de dibujo — de abajo hacia arriba
+const Z = {
+  fondo: 0, tablero: 1, camino: 5, serpiente: 10, energia: 11,
+  aura: 21, comp: 22, carga: 25, compArriba: 26, chip: 27, cabeza: 30, zona: 40,
+  particulas: 100, hud: 150, manito: 200, panel: 300,
+};
 
 export default class PuzzleScene extends Phaser.Scene {
   constructor() { super('PuzzleScene'); }
@@ -13,6 +28,7 @@ export default class PuzzleScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const levelData = LEVELS[this.nivelIdx];
     if (!levelData) { this.scene.start('RoomScene'); return; }
+    entrarEscena(this);
 
     this.grid       = levelData.grid;
     this.ROWS       = this.grid.length;
@@ -29,9 +45,10 @@ export default class PuzzleScene extends Phaser.Scene {
     // ── reloj del nivel ──
     // Date.now() y no this.time: hay que medir tiempo real del chico, y el reloj
     // de la escena se pausa si el navegador manda la pestaña a segundo plano.
+    // Ya no se muestra en pantalla (al chico no le dice nada), pero se sigue
+    // registrando para analizar la dificultad de cada nivel.
     this.tiempoInicio   = Date.now();
     this.tiempoFin      = null;
-    this._ultimoSegundo = -1;
 
     // ── guía visual del orden ──
     // proximoComp = el componente al que la cabeza tiene que ir AHORA. Arranca en
@@ -43,7 +60,11 @@ export default class PuzzleScene extends Phaser.Scene {
     // Los primeros niveles muestran el camino gratis: ahí el chico todavía no sabe
     // que los componentes van en un orden. Después se paga con una pista.
     this.NIVELES_CON_CAMINO = 5;
-    this.mostrarCamino = this.nivelIdx < this.NIVELES_CON_CAMINO;
+    this.caminoGratis  = this.nivelIdx < this.NIVELES_CON_CAMINO;
+    this.mostrarCamino = this.caminoGratis;
+    // La manito que señala el botón a tocar: sólo en los primeros niveles, y sólo
+    // si el chico se queda quieto. Es el onboarding sin texto.
+    this.NIVELES_CON_MANITO = 3;
     this.connected    = false;
     this.solved       = false;
     this.headDir      = { dc: 1, dr: 0 };
@@ -82,69 +103,71 @@ export default class PuzzleScene extends Phaser.Scene {
         : this.SNAKE_LENGTH);
 
     // ── zonas fijas ──
-    const isMobile = window.isMobile || false;
-    const HUD_H  = 36;
-    const CTRL_W = isMobile ? 0   : 200;  // en móvil no hay columna derecha
-    const HINT_H = isMobile ? 110 : 70;   // en móvil hint+pad comparten más espacio
-    const PAD    = 8;
+    // Mismo layout en escritorio y en móvil: la resolución lógica es siempre 800x600
+    // y el pad grande a la derecha queda justo bajo el pulgar en un celular apaisado.
+    const HUD_H  = 70;
+    const CTRL_W = 230;
+    const TRAY_H = 66;
+    const PAD    = 10;
+    const MARCO  = 16;                    // borde de madera alrededor de las fichas
     const CTRL_X = width - CTRL_W;
+    this.CTRL_X = CTRL_X;
+    this.TRAY_Y = height - TRAY_H / 2 - 6;
 
-    const gridZoneW = CTRL_X - PAD * 2;
-    const gridZoneH = height - HUD_H - HINT_H - PAD * 2;
+    const gridZoneW = CTRL_X - PAD * 2 - MARCO * 2;
+    const gridZoneH = height - HUD_H - TRAY_H - PAD * 2 - MARCO * 2;
 
-    const GAP     = 3;
-    const maxTile = isMobile ? 44 : 64;
+    const GAP     = 5;
+    const maxTile = 72;
     const tileW   = Math.floor((gridZoneW - (this.COLS - 1) * GAP) / this.COLS);
     const tileH   = Math.floor((gridZoneH - (this.ROWS - 1) * GAP) / this.ROWS);
     this.TILE     = Math.min(tileW, tileH, maxTile);
-    this.GAP     = GAP;
+    this.GAP      = GAP;
 
     const gridW  = this.COLS * this.TILE + (this.COLS - 1) * GAP;
     const gridH  = this.ROWS * this.TILE + (this.ROWS - 1) * GAP;
+    this.gridW = gridW; this.gridH = gridH;
 
     // centrar el grid en su zona
-    this.originX = PAD + Math.floor((gridZoneW - gridW) / 2);
-    this.originY = HUD_H + PAD + Math.floor((gridZoneH - gridH) / 2);
+    this.originX = PAD + MARCO + Math.floor((gridZoneW - gridW) / 2);
+    this.originY = HUD_H + PAD + MARCO + Math.floor((gridZoneH - gridH) / 2);
 
-    // ── fondo (placeholder → pixel art) ──
-    SpriteConfig.fondo(this, 'puzzle', width, height, 0x0d0d1f);
-    // ¿hay sprite de cuadro de grid cargado? (decide tiles imagen vs vectoriales)
-    this.usaGridSprite = !!SpriteConfig.get('grid', 'tile') && this.textures.exists('tile');
+    asegurarTexturas(this);
+    this._dibujarFondo(width, height);
+    this._dibujarTablero();
 
-    // zona controles fondo (solo desktop)
-    if (!isMobile) {
-      this.add.rectangle(CTRL_X, HUD_H, CTRL_W, height - HUD_H, 0x09091a).setOrigin(0);
-      this.add.rectangle(CTRL_X, HUD_H, 1, height - HUD_H, 0x2a2a4a).setOrigin(0);
-    }
+    // capas dinámicas de la serpiente (se redibujan en cada paso)
+    this.serpGfx    = this.add.graphics().setDepth(Z.serpiente);
+    this.energiaGfx = this.add.graphics().setDepth(Z.energia);
+    this.tweens.add({
+      targets: this.energiaGfx, alpha: { from: 0.55, to: 1 },
+      duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+    this.cabeza = null;
+    this.tileObjects = {};
+    this.caminoGfx = null;
+    this.btnReiniciar = null;
+    this._latidoReinicio = null;
 
-    // zona hint fondo
-    this.add.rectangle(0, height - HINT_H, CTRL_X, HINT_H, 0x080814).setOrigin(0);
-    this.add.rectangle(0, height - HINT_H, CTRL_X, 1, 0x2a2a4a).setOrigin(0);
-
-    this._crearHUD(levelData, CTRL_X);
-    this.tileGraphics = this.add.graphics();
-    this.tileObjects  = {};
-    this._dibujarGrid();
+    this._crearHUD(CTRL_X);
+    this._calcularRuta();
     this._dibujarCamino();
-    this._crearHintBar(height - HINT_H + 4, CTRL_X);
+    this._crearBandeja();
     this._crearControles(CTRL_X, width, HUD_H, height);
-
     this._crearParticulas();
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-R', () => this._reiniciar());
 
-    // status text
-    const statusX = isMobile ? width / 2 : CTRL_X + CTRL_W / 2;
-    const statusY = isMobile ? height - HINT_H + 6 : HUD_H + 14;
-    this.statusTxt = this.add.text(statusX, statusY, '', {
-      fontSize: isMobile ? '10px' : '12px',
-      color: '#888', fontFamily: FUENTE,
-      wordWrap: { width: isMobile ? width / 2 : CTRL_W - 16 },
-      align: 'center'
-    }).setOrigin(0.5, 0);
+    this._dibujarGrid();
+    this._actualizarEnergia();
 
-    this._actualizarStatus();
+    // (la instancia de la escena se reutiliza: no arrastrar el timer del intento anterior)
+    this.manito = null;
+    this._timerManito = null;
+    this._programarManito(this.nivelIdx === 0 ? 1200 : 2600);
+
+    Sonido.arrancarMusica();
   }
 
   // ── parsear: BAT primero, LED al final ──
@@ -170,13 +193,14 @@ export default class PuzzleScene extends Phaser.Scene {
     return sorted;
   }
 
+  // color = el del arte de plastilina de cada pieza (antes eran los neón del tema oscuro)
   _compDef(sym) {
     const defs = {
-      b: { color: 0x4fc3f7, label: 'BAT', type: 'battery'   },
-      r: { color: 0xce93d8, label: 'R',   type: 'resistor'  },
-      c: { color: 0xa5d6a7, label: 'CAP', type: 'capacitor' },
-      l: { color: 0xff7043, label: 'LED', type: 'led'        },
-      s: { color: 0xfff176, label: 'SW',  type: 'switch'    },
+      b: { color: 0x4aa8e0, label: 'BAT', type: 'battery',   sprite: 'bateria'     },
+      r: { color: 0xa77bd0, label: 'R',   type: 'resistor',  sprite: 'resistencia' },
+      c: { color: 0x5cc9a0, label: 'CAP', type: 'capacitor', sprite: 'capacitor'   },
+      l: { color: 0xe8483a, label: 'LED', type: 'led',       sprite: 'led'         },
+      s: { color: 0xe8b830, label: 'SW',  type: 'switch',    sprite: 'switch'      },
     };
     return defs[sym] || null;
   }
@@ -209,7 +233,7 @@ export default class PuzzleScene extends Phaser.Scene {
     len += 2;
     this.SNAKE_LENGTH = len;
     this.SNAKE_MAP = Array(len).fill(null).map(() => ({
-      comp: null, color: 0x1a9e65, sym: null, label: null, order: null
+      comp: null, color: SERP.cuerpo, sym: null, label: null, order: null
     }));
     let cursor = len - 2;   // batería en len-2; el índice len-1 queda como cola vacía
     for (let i = 0; i < comps.length; i++) {
@@ -220,7 +244,7 @@ export default class PuzzleScene extends Phaser.Scene {
       };
       if (i < comps.length - 1) cursor -= dists[i];
     }
-    this.SNAKE_MAP[0] = { comp: null, color: 0x4fc3f7, sym: null, label: null, order: null };
+    this.SNAKE_MAP[0] = { comp: null, color: SERP.cuerpo, sym: null, label: null, order: null };
   }
 
   // La serpiente nace ENTERA en una sola casilla: al principio sólo se ve la
@@ -247,622 +271,656 @@ export default class PuzzleScene extends Phaser.Scene {
     return Array.from({ length: this.SNAKE_LENGTH }, () => ({ c, r }));
   }
 
-  // ── HUD ──
-  _crearHUD(levelData, ctrlX) {
-    const { width } = this.scale;
-    this.add.rectangle(0, 0, width, 36, 0x080814).setOrigin(0);
-    this.add.rectangle(0, 36, width, 1, 0x2a2a4a).setOrigin(0);
+  // ─────────────────────────────────────────────────────────────────────────
+  // Escenario estático: fondo + tablero de madera con fichas de masa
+  // ─────────────────────────────────────────────────────────────────────────
 
-    // botón selector de niveles — izquierda
-    const nivBg = this.add.rectangle(10, 18, 26, 22, 0x12122a)
-      .setStrokeStyle(1, 0x4fc3f7).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
-    const nivTxt = this.add.text(23, 18, '☰', {
-      fontSize: '15px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    const abrirNiveles = () => this.scene.start('LevelSelectScene', { desde: this.nivelIdx });
-    nivBg.on('pointerover', () => nivBg.setFillStyle(0x1a1a3a));
-    nivBg.on('pointerout',  () => nivBg.setFillStyle(0x12122a));
-    nivBg.on('pointerdown', abrirNiveles);
-    nivTxt.setInteractive({ useHandCursor: true }).on('pointerdown', abrirNiveles);
-
-    // nombre nivel — izquierda
-    this.add.text(44, 18, levelData.name.toUpperCase(), {
-      fontSize: '11px', color: '#4fc3f7', fontFamily: FUENTE
-    }).setOrigin(0, 0.5);
-
-    // puntos — centrado en zona grid
-    this.add.text(ctrlX / 2, 18, `★ ${GameState.puntosTotal} pts`, {
-      fontSize: '12px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5, 0.5);
-
-    // botón salir — extremo derecho de zona grid con margen
-    const salirBg = this.add.rectangle(ctrlX - 8, 18, 58, 22, 0x1a0a0a)
-      .setStrokeStyle(1, 0xef5350)
-      .setOrigin(1, 0.5)
-      .setInteractive({ useHandCursor: true });
-    const salirTxt = this.add.text(ctrlX - 37, 18, 'salir', {
-      fontSize: '11px', color: '#ef5350', fontFamily: FUENTE
-    }).setOrigin(0.5, 0.5);
-    salirBg.on('pointerover',  () => salirBg.setFillStyle(0x3a0a0a));
-    salirBg.on('pointerout',   () => salirBg.setFillStyle(0x1a0a0a));
-    salirBg.on('pointerdown',  () => this.scene.start('RoomScene'));
-    salirTxt.setInteractive({ useHandCursor: true });
-    salirTxt.on('pointerdown', () => this.scene.start('RoomScene'));
-
-    // movimientos — justo antes del botón salir
-    this.moveTxt = this.add.text(ctrlX - 74, 18, 'mov: 0', {
-      fontSize: '11px', color: '#a5d6a7', fontFamily: FUENTE
-    }).setOrigin(1, 0.5);
-
-    // reloj del nivel — el dato que después se sube a la base de datos
-    this.tiempoTxt = this.add.text(ctrlX - 126, 18, '⏱ 0:00', {
-      fontSize: '11px', color: '#8a8aa8', fontFamily: FUENTE
-    }).setOrigin(1, 0.5);
+  // El puzzle pasa "en el cuarto": el fondo es el mismo cuarto de plastilina,
+  // oscurecido para que el tablero sea protagonista. Antes era un fondo azul
+  // noche de ciencia ficción que no tenía nada que ver con el resto del juego.
+  _dibujarFondo(width, height) {
+    const bgKey = SpriteConfig.get('cuarto', 'bg');
+    if (bgKey && this.textures.exists(bgKey)) {
+      this.add.image(0, 0, bgKey).setOrigin(0).setDisplaySize(width, height).setDepth(Z.fondo);
+    }
+    this.add.rectangle(0, 0, width, height, 0x2a1a0e, 0.58).setOrigin(0).setDepth(Z.fondo);
+    // viñeta suave: oscurece bordes, concentra la mirada en el centro
+    const v = this.add.graphics().setDepth(Z.fondo);
+    for (let i = 0; i < 6; i++) {
+      v.lineStyle(40, 0x1a0e06, 0.07);
+      v.strokeRect(-20 + i * 14, -20 + i * 14, width + 40 - i * 28, height + 40 - i * 28);
+    }
   }
 
-  // ── camino punteado ──
-  // Piedritas que marcan la ruta: entrada → batería → … → LED. En los primeros
-  // niveles sale gratis (el chico todavía no sabe que hay un orden); después hay
-  // que pedirlo con el botón de pista.
-  // No revela la solución completa: marca por dónde ir, pero la serpiente igual
-  // tiene que caber sin morderse.
-  _dibujarCamino() {
-    if (this.caminoGfx) { this.caminoGfx.destroy(); this.caminoGfx = null; }
-    if (!this.mostrarCamino || this.solved) return;
+  _dibujarTablero() {
+    const T = this.TILE, G = this.GAP;
+    const M = 16, canto = 12;
+    const bw = this.gridW + M * 2, bh = this.gridH + M * 2;
+    const bx = this.originX - M, by = this.originY - M;
 
-    const g = this.add.graphics().setDepth(96);
-    this.caminoGfx = g;
+    // tabla de madera de plastilina
+    losa(this, bx + bw / 2, by + (bh + canto) / 2, bw, bh + canto,
+      { fill: CLAY.madera, r: 24, canto, grosor: 5, sombra: 0.35, brillo: 0.18 }).setDepth(Z.tablero);
 
-    // celdas ocupadas por componentes: el camino tiene que esquivarlas o el chico
-    // pisa una pieza que no es la que toca y se le desordena la secuencia
-    const ocupadas = new Set(this.COMPONENTS.map(c => `${c.c},${c.r}`));
-
-    // tramo en L entre dos celdas, en una de las dos formas posibles
-    const tramo = (a, b, vertPrimero) => {
-      const cel = [];
-      if (vertPrimero) {
-        for (let r = a.r; r !== b.r; r += Math.sign(b.r - a.r)) cel.push({ c: a.c, r });
-        for (let c = a.c; c !== b.c; c += Math.sign(b.c - a.c)) cel.push({ c, r: b.r });
-      } else {
-        for (let c = a.c; c !== b.c; c += Math.sign(b.c - a.c)) cel.push({ c, r: a.r });
-        for (let r = a.r; r !== b.r; r += Math.sign(b.r - a.r)) cel.push({ c: b.c, r });
-      }
-      cel.shift();                          // el primero es el componente anterior
-      return cel;
-    };
-    const cruces = cel => cel.filter(x => ocupadas.has(`${x.c},${x.r}`)).length;
-
-    const ruta = [this.celdaEntrada, ...this.COMPONENTS];
-    for (let i = 0; i < ruta.length - 1; i++) {
-      const a = ruta[i], b = ruta[i + 1];
-      const color = this._compDef(b.sym).color;
-      // de las dos L, la que menos componentes atraviesa
-      const horiz = tramo(a, b, false), vert = tramo(a, b, true);
-      const celdas = cruces(vert) < cruces(horiz) ? vert : horiz;
-
-      celdas.forEach(cl => {
-        if (ocupadas.has(`${cl.c},${cl.r}`)) return;   // nunca una piedrita sobre una pieza
-        const p = this._celdaCentro(cl.c, cl.r);
-        g.fillStyle(color, 0.5);
-        g.fillCircle(p.x, p.y, Math.max(3, this.TILE * 0.09));
-      });
+    const g = this.add.graphics().setDepth(Z.tablero);
+    // vetas
+    g.lineStyle(2, oscurecer(CLAY.madera, 0.85), 0.5);
+    for (let i = 1; i < 5; i++) {
+      const yy = by + (bh / 5) * i + Math.sin(i * 1.7) * 6;
+      g.beginPath(); g.moveTo(bx + 18, yy); g.lineTo(bx + bw * 0.45, yy + 3); g.lineTo(bx + bw - 18, yy - 2); g.strokePath();
     }
 
-    // late suave para que se lea como "seguime" y no como decoración
-    this.tweens.add({
-      targets: g, alpha: { from: 0.45, to: 1 },
-      duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-    });
-  }
-
-  // ── grid ──
-  _dibujarGrid() {
-    const g  = this.tileGraphics;
-    const T  = this.TILE;
-    const ox = this.originX;
-    const oy = this.originY;
-    g.clear();
+    const R = Math.max(6, T * 0.2);
+    const ocupadas = new Map(this.COMPONENTS.map(c => [`${c.c},${c.r}`, c]));
 
     for (let r = 0; r < this.ROWS; r++) {
       for (let c = 0; c < this.COLS; c++) {
-        const tx  = ox + c * (T + this.GAP);
-        const ty  = oy + r * (T + this.GAP);
-        const tcx = tx + T / 2;
-        const tcy = ty + T / 2;
-        const si    = this.snake.findIndex(s => s.c === c && s.r === r);
-        const sm    = si >= 0 ? this.SNAKE_MAP[si] : null;
-        const comp  = this.COMPONENTS.find(co => co.c === c && co.r === r);
-        const swKey = `${c},${r}`;
+        const tx = this.originX + c * (T + G);
+        const ty = this.originY + r * (T + G);
+        // ficha de masa: canto, cara y brillo
+        g.fillStyle(0x5a3a1a, 0.25); g.fillRoundedRect(tx + 1, ty + 4, T, T - 1, R);
+        g.fillStyle(CLAY.fichaCanto, 1); g.fillRoundedRect(tx, ty + 2, T, T - 2, R);
+        g.fillStyle(CLAY.ficha, 1);      g.fillRoundedRect(tx, ty, T, T - 4, R);
+        g.fillStyle(0xffffff, 0.35);     g.fillRoundedRect(tx + T * 0.16, ty + T * 0.08, T * 0.68, T * 0.14, T * 0.07);
 
-        // fondo + borde del cuadro — vectorial (placeholder); se omite si hay sprite de tile
-        if (!this.usaGridSprite) {
-          let bg = 0x1e1e3a;
-          if (si === 0)                                   bg = 0x0d0d1f;
-          else if (si > 0 && si < this.snake.length - 1) bg = 0x091e12;
-          else if (si === this.snake.length - 1)          bg = 0x071610;
-          g.fillStyle(bg);
-          g.fillRoundedRect(tx, ty, T, T, 4);
-
-          let borderCol = 0x2a2a4a, borderW = 1;
-          if (si > 0 && sm)   { borderCol = sm.color; borderW = 1.5; }
-          if (si === 0)       { borderCol = 0x000000; borderW = 0; }
-          if (comp && si < 0) { borderCol = this._compDef(comp.sym).color; borderW = 2; }
-          if (comp && si >= 0){ borderCol = 0xffffff; borderW = 2; }
-          if (comp && comp.sym === 's' && si >= 0 && this.connected && !this.solved) {
-            borderCol = 0xfff176; borderW = 2.5;
-          }
-          if (this.solved) { borderCol = 0x4caf50; borderW = 2; }
-          if (borderW > 0) {
-            g.lineStyle(borderW, borderCol, 1);
-            g.strokeRoundedRect(tx, ty, T, T, 4);
-          }
-        }
-
-        // limpiar objetos anteriores
-        const tkey = `${c},${r}`;
-        if (this.tileObjects[tkey]) this.tileObjects[tkey].forEach(o => {
-          this.tweens.killTweensOf(o); o.destroy();
-        });
-        this.tileObjects[tkey] = [];
-
-        // cuadro como sprite (si hay pixel art de tile cargado)
-        if (this.usaGridSprite) {
-          const tn = si === 0 ? 'tile_head'
-                   : si > 0   ? 'tile_body'
-                   : comp     ? 'tile_goal' : 'tile';
-          const timg = SpriteConfig.colocar(this, 'grid', tn, tcx, tcy,
-            () => SpriteConfig.colocar(this, 'grid', 'tile', tcx, tcy, null));
-          if (timg) { timg.setDisplaySize(T, T); this.tileObjects[tkey].push(timg); }
-        }
-
-        // ── cuerpo / cola de la serpiente (sprite de plastilina) — base del segmento ──
-        let cuerpoSprite = false;
-        if (si > 0) {
-          const esCola = si === this.snake.length - 1;
-          const ck = SpriteConfig.get('serpiente', esCola ? 'cola' : 'cuerpo');
-          if (ck && this.textures.exists(ck)) {
-            const seg = this.add.image(tcx, tcy, ck).setDisplaySize(T, T);
-            if (esCola) {                       // cola: orientar hacia afuera (lejos del cuerpo)
-              const nb = this.snake[si - 1];
-              if (nb) seg.setAngle(Phaser.Math.RadToDeg(Math.atan2(r - nb.r, c - nb.c)));
-            } else {                            // cuerpo: rotar el enlace según su orientación
-              const prev = this.snake[si - 1];  // vecino hacia la cabeza
-              if (prev) seg.setAngle(Phaser.Math.RadToDeg(Math.atan2(prev.r - r, prev.c - c)));
-            }
-            this.tileObjects[tkey].push(seg);
-            cuerpoSprite = true;
-          }
-        }
-
-        // corriente: se iluminan los segmentos energizados [lowerIdx..contactIdx].
-        // un switch abierto sube lowerIdx y corta el flujo antes de la cabeza.
-        if (!this.solved && this.contactIdx >= 0 && si >= this.lowerIdx && si <= this.contactIdx) {
-          const delay = si * 70;  // cabeza(0) primero → hacia el punto de contacto
-          // relleno encendido (queda claramente iluminado, pulsando)
-          const flow = this.add.rectangle(tcx, tcy, T * 0.96, T * 0.96, 0x4fc3f7, 1)
-            .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35);
-          this.tweens.add({
-            targets: flow, alpha: { from: 0.35, to: 0.75 },
-            duration: 480, delay, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-          });
-          // borde brillante para reforzar el "encendido"
-          const ring = this.add.rectangle(tcx, tcy, T * 0.96, T * 0.96)
-            .setStrokeStyle(2, 0x9fe6ff, 0.9);
-          this.tweens.add({
-            targets: ring, alpha: { from: 0.4, to: 1 },
-            duration: 480, delay, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-          });
-          this.tileObjects[tkey].push(flow, ring);
-        }
-
-        // ── el próximo componente late: "andá acá ahora" ──
-        // Es la guía que enseña el orden sin números. Empieza en la batería (siempre
-        // primera) y va saltando sola. No dice el camino, sólo el destino: rutear la
-        // serpiente sigue siendo del chico.
-        const esProximo = comp && !this.solved &&
-                          this.COMPONENTS[this.proximoComp] === comp;
-        if (esProximo) {
-          const halo = this.add.circle(tcx, tcy, T * 0.62, 0xffffff, 0.30)
-            .setBlendMode(Phaser.BlendModes.ADD).setDepth(97);
-          this.tweens.add({
-            targets: halo, scale: { from: 0.75, to: 1.15 }, alpha: { from: 0.5, to: 0.1 },
-            duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-          });
-          const aro = this.add.rectangle(tcx, tcy, T * 0.98, T * 0.98)
-            .setStrokeStyle(3, 0xffffff, 0.95).setDepth(97);
-          this.tweens.add({
-            targets: aro, alpha: { from: 0.35, to: 1 },
-            duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-          });
-          this.tileObjects[tkey].push(halo, aro);
-        }
-
-        // glow pulsante en componentes alineados (encendidos por la corriente)
-        if (comp && si >= 0 && sm && sm.comp && this._segmentoAlineado(si)) {
-          const glow = this.add.circle(tcx, tcy, T * 0.5, sm.color, 0.35)
-            .setBlendMode(Phaser.BlendModes.ADD);
-          this.tweens.add({
-            targets: glow, alpha: { from: 0.15, to: 0.5 }, scale: { from: 0.85, to: 1.1 },
-            duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-          });
-          this.tileObjects[tkey].push(glow);
-        }
-
-        // ── figura objetivo del componente — visible mientras se juega ──
-        // (resuelto: no se dibuja, la serpiente cubre todo limpio)
-        if (comp && !this.solved) {
-          const cubierto = si >= 0;  // hay un segmento de serpiente sobre la celda
-          const def  = this._compDef(comp.sym);
-          const objs = this._dibujarSimbolo(comp.sym, tcx, tcy - T * 0.1, T * 0.32, def.color, this.switchStates[swKey]);
-          // bajo la serpiente la figura va un poco tenue, pero presente
-          objs.forEach(o => o.setAlpha(cubierto ? 0.55 : 1));
-          this.tileObjects[tkey].push(...objs);
-          const col  = `#${def.color.toString(16).padStart(6,'0')}`;
-          const lbl  = this.add.text(tcx, tcy + T * 0.22, def.label, {
-            fontSize: `${Math.max(9, Math.floor(T * 0.16))}px`, color: col, fontFamily: FUENTE,
-            stroke: '#000000', strokeThickness: 2
-          }).setOrigin(0.5).setAlpha(cubierto ? 0.6 : 1);
-          // número de orden — SIEMPRE nítido (referencia clave que no debe perderse)
-          const numSz  = Math.max(13, Math.floor(T * 0.26));
-          const chipR  = numSz * 0.78;
-          const chipX  = tx + T - chipR - 2;
-          const chipY  = ty + chipR + 2;
-          const chip   = this.add.circle(chipX, chipY, chipR, 0x0d0d1f, 0.9)
-            .setStrokeStyle(1.5, def.color);
-          const num    = this.add.text(chipX, chipY, `${comp.order}`, {
-            fontSize: `${numSz}px`, color: '#ffffff', fontFamily: FUENTE,
-            stroke: '#000000', strokeThickness: 2
-          }).setOrigin(0.5);
-          this.tileObjects[tkey].push(lbl, chip, num);
-        }
-
-        // ── serpiente encima — translúcida sobre componentes (opaca al resolver) ──
-        const snakeAlpha = (comp && !this.solved) ? 0.5 : 1;  // deja ver el objetivo debajo
-        if (si === 0) {
-          const objs = this._dibujarCabeza(tx, ty, T, this.headDir);
-          objs.forEach(o => o.setAlpha(snakeAlpha));
-          this.tileObjects[tkey].push(...objs);
-        }
-        // cuerpo con componente
-        else if (si > 0 && sm && sm.sym) {
-          const objs = this._dibujarSimbolo(sm.sym, tcx, tcy, T * 0.28, sm.color, this.switchStates[swKey]);
-          objs.forEach(o => o.setAlpha(snakeAlpha));
-          this.tileObjects[tkey].push(...objs);
-        }
-        // cuerpo vacío (punto) — solo si NO hay sprite de cuerpo
-        else if (si > 0 && sm && !sm.sym && !cuerpoSprite) {
-          const dot = this.add.circle(tcx, tcy, T * 0.08, sm.color, 0.35);
-          this.tileObjects[tkey].push(dot);
-        }
-
-        // zona clickeable switch
-        if (comp && comp.sym === 's' && this.connected && !this.solved) {
-          const zone = this.add.rectangle(tcx, tcy, T - 4, T - 4, 0xffffff, 0)
-            .setInteractive({ useHandCursor: true });
-          zone.on('pointerdown', () => this._toggleSwitch(swKey));
-          this.tileObjects[tkey].push(zone);
+        // hueco del componente: un platito del color de la pieza
+        const comp = ocupadas.get(`${c},${r}`);
+        if (comp) {
+          const col = this._compDef(comp.sym).color;
+          g.fillStyle(aclarar(col, 0.55), 1);  g.fillCircle(tx + T / 2, ty + T / 2 - 1, T * 0.4);
+          g.lineStyle(3, aclarar(col, 0.25), 1); g.strokeCircle(tx + T / 2, ty + T / 2 - 1, T * 0.4);
+          g.fillStyle(0xffffff, 0.35);         g.fillEllipse(tx + T / 2, ty + T * 0.73, T * 0.42, T * 0.1);
         }
       }
     }
+
+    // la cueva por donde entra la serpiente
+    const e = this._celdaCentro(this.celdaEntrada.c, this.celdaEntrada.r);
+    g.fillStyle(0x3a2410, 0.85); g.fillEllipse(e.x, e.y + T * 0.08, T * 0.7, T * 0.5);
+    g.fillStyle(0x1a0e06, 0.9);  g.fillEllipse(e.x, e.y + T * 0.12, T * 0.5, T * 0.32);
   }
 
-  _dibujarCabeza(tx, ty, T, dir) {
-    const cx = tx + T / 2;
-    const cy = ty + T / 2;
-    const dc = dir.dc, dr = dir.dr;
-
-    // sprite de cabeza (rotado según dirección) si está disponible
-    const headKey = SpriteConfig.get('serpiente', 'cabeza');
-    if (headKey && this.textures.exists(headKey)) {
-      const ang = dc === 1 ? 0 : dc === -1 ? 180 : dr === 1 ? 90 : -90;  // arte mira a la derecha
-      const img = this.add.image(cx, cy, headKey).setDisplaySize(T, T).setAngle(ang);
-      return [img];
-    }
-
-    const objs = [];
-    const g  = this.add.graphics();
-    const m  = 2;
-
-    let pts;
-    if (dc === 1  && dr === 0)  pts = [[tx+m,ty+m],[tx+T*0.7,ty+m],[tx+T-m,cy],[tx+T*0.7,ty+T-m],[tx+m,ty+T-m]];
-    else if (dc === -1 && dr === 0) pts = [[tx+T-m,ty+m],[tx+T*0.3,ty+m],[tx+m,cy],[tx+T*0.3,ty+T-m],[tx+T-m,ty+T-m]];
-    else if (dc === 0 && dr === -1) pts = [[tx+m,ty+T-m],[tx+m,ty+T*0.3],[cx,ty+m],[tx+T-m,ty+T*0.3],[tx+T-m,ty+T-m]];
-    else pts = [[tx+m,ty+m],[tx+T-m,ty+m],[tx+T-m,ty+T*0.7],[cx,ty+T-m],[tx+m,ty+T*0.7]];
-
-    g.fillStyle(0x0a1a2a, 1);
-    g.beginPath(); g.moveTo(pts[0][0],pts[0][1]);
-    pts.slice(1).forEach(p => g.lineTo(p[0],p[1]));
-    g.closePath(); g.fillPath();
-
-    g.fillStyle(0x4fc3f7, 0.07);
-    g.beginPath(); g.moveTo(pts[0][0],pts[0][1]);
-    pts.slice(1).forEach(p => g.lineTo(p[0],p[1]));
-    g.closePath(); g.fillPath();
-
-    g.lineStyle(2, 0x4fc3f7, 1);
-    g.beginPath(); g.moveTo(pts[0][0],pts[0][1]);
-    pts.slice(1).forEach(p => g.lineTo(p[0],p[1]));
-    g.closePath(); g.strokePath();
-    objs.push(g);
-
-    // ojos
-    const eo = T * 0.28;
-    let ex1, ey1, ex2, ey2;
-    if (dc === 1  && dr === 0)  { ex1=cx-eo; ey1=cy-eo*0.8; ex2=cx-eo; ey2=cy+eo*0.8; }
-    else if (dc === -1 && dr === 0) { ex1=cx+eo; ey1=cy-eo*0.8; ex2=cx+eo; ey2=cy+eo*0.8; }
-    else if (dc === 0 && dr === -1) { ex1=cx-eo*0.8; ey1=cy+eo; ex2=cx+eo*0.8; ey2=cy+eo; }
-    else { ex1=cx-eo*0.8; ey1=cy-eo; ex2=cx+eo*0.8; ey2=cy-eo; }
-
-    const ge = this.add.graphics();
-    ge.fillStyle(0x4fc3f7, 0.9); ge.fillCircle(ex1,ey1,T*0.09); ge.fillCircle(ex2,ey2,T*0.09);
-    ge.fillStyle(0x020d16, 1);   ge.fillCircle(ex1,ey1,T*0.045); ge.fillCircle(ex2,ey2,T*0.045);
-    ge.fillStyle(0xffffff, 0.85); ge.fillCircle(ex1+1,ey1-1,T*0.025); ge.fillCircle(ex2+1,ey2-1,T*0.025);
-    objs.push(ge);
-
-    // lengua bífida
-    const lt = T * 0.14, lf = T * 0.1;
-    let lx, ly, l2x, l2y, l3x, l3y, l4x, l4y;
-    if (dc === 1  && dr === 0)  { lx=tx+T-m; ly=cy; l2x=lx+lt; l2y=cy; l3x=l2x+lf; l3y=cy-lf; l4x=l2x+lf; l4y=cy+lf; }
-    else if (dc === -1 && dr === 0) { lx=tx+m; ly=cy; l2x=lx-lt; l2y=cy; l3x=l2x-lf; l3y=cy-lf; l4x=l2x-lf; l4y=cy+lf; }
-    else if (dc === 0 && dr === -1) { lx=cx; ly=ty+m; l2x=cx; l2y=ly-lt; l3x=cx-lf; l3y=l2y-lf; l4x=cx+lf; l4y=l2y-lf; }
-    else { lx=cx; ly=ty+T-m; l2x=cx; l2y=ly+lt; l3x=cx-lf; l3y=l2y+lf; l4x=cx+lf; l4y=l2y+lf; }
-    const gl = this.add.graphics();
-    gl.lineStyle(2, 0xff7043, 1);
-    gl.beginPath(); gl.moveTo(lx,ly); gl.lineTo(l2x,l2y); gl.strokePath();
-    gl.lineStyle(1.5, 0xff7043, 1);
-    gl.beginPath(); gl.moveTo(l2x,l2y); gl.lineTo(l3x,l3y); gl.strokePath();
-    gl.beginPath(); gl.moveTo(l2x,l2y); gl.lineTo(l4x,l4y); gl.strokePath();
-    objs.push(gl);
-    return objs;
+  // ── camino de piedritas = la solución real ──
+  // Piedritas que marcan por dónde ir: entrada → batería → … → LED. En los primeros
+  // niveles sale gratis (el chico todavía no sabe que hay un orden); después hay
+  // que pedirlo con el botón de pista. La usa también la manito.
+  //
+  // Antes la ruta se armaba con tramos en L entre componentes, sin simular el
+  // cuerpo: en los 50 niveles llevaba a chocar con la propia serpiente o a un
+  // recorrido que no conectaba. Ahora es una solución de verdad, calculada con
+  // _resolver() simulando la serpiente paso a paso. Si el chico se desvía, se
+  // recalcula desde donde está; si ya no hay salida, se avisa con el ↻.
+  _calcularRuta() {
+    // índice de cuerpo en el que tiene que terminar cada componente (bat = len-2 … LED = 1)
+    this._pIdx = this.COMPONENTS.map(c => this.SNAKE_MAP.findIndex(sm => sm.comp && sm.order === c.order));
+    this._tipoEn = new Map(this.COMPONENTS.map(c => [`${c.c},${c.r}`, this._compDef(c.sym).type]));
+    this._fijarRuta(this._resolver(this.snake, 8, 200000));
   }
 
-  _dibujarSimbolo(sym, cx, cy, sz, color, swClosed) {
-    // sprite del componente si está disponible (placeholder → pixel art)
-    const compName = { b: 'bateria', r: 'resistencia', c: 'capacitor', l: 'led',
-                       s: swClosed ? 'switch_on' : 'switch' }[sym];
-    const spriteKey = compName && SpriteConfig.get('componentes', compName);
-    if (spriteKey && this.textures.exists(spriteKey)) {
-      const img = this.add.image(cx, cy, spriteKey).setDisplaySize(sz * 2.4, sz * 2.4);
-      return [img];
-    }
-
-    const objs = [];
-    const g = this.add.graphics();
-    g.lineStyle(2, color, 1);
-    if (sym === 'b' || sym === 'l') {
-      g.strokeCircle(cx, cy, sz);
-    } else if (sym === 'r') {
-      g.strokeRect(cx - sz, cy - sz * 0.55, sz * 2, sz * 1.1);
-    } else if (sym === 'c') {
-      g.strokeTriangle(cx, cy - sz, cx - sz, cy + sz * 0.8, cx + sz, cy + sz * 0.8);
-    } else if (sym === 's') {
-      if (swClosed) {
-        g.strokeRect(cx - sz, cy - sz * 0.3, sz * 2, sz * 0.6);
-      } else {
-        g.beginPath(); g.moveTo(cx - sz, cy); g.lineTo(cx - sz * 0.2, cy); g.strokePath();
-        g.beginPath(); g.moveTo(cx + sz * 0.2, cy - sz * 0.6); g.lineTo(cx + sz, cy); g.strokePath();
-        g.strokeCircle(cx - sz * 0.2, cy - sz * 0.6, sz * 0.12);
+  _fijarRuta(sol) {
+    const h = this.snake[0];
+    this.ruta     = sol ? [{ c: h.c, r: h.r }, ...sol] : null;
+    this.rutaPos  = 0;
+    this.atascado = !sol;
+    // color de cada piedrita = el del próximo componente que esa ruta va a pisar
+    this.rutaColor = [];
+    if (this.ruta) {
+      let col = this._compDef(this.COMPONENTS[this.COMPONENTS.length - 1].sym).color;
+      for (let i = this.ruta.length - 1; i >= 0; i--) {
+        const comp = this.COMPONENTS.find(c => c.c === this.ruta[i].c && c.r === this.ruta[i].r);
+        if (comp) col = this._compDef(comp.sym).color;
+        this.rutaColor[i] = col;
       }
     }
-    objs.push(g);
-    return objs;
+    this._marcarAtasco();
   }
 
-  // ── barra de pista (oculta hasta hacer click) ──
-  _crearHintBar(barY, maxX) {
-    const isMobile = window.isMobile || false;
-    this.hintBarY  = barY;
-    this.hintCy    = barY + (isMobile ? 36 : 34);
-    this.hintSeqObjs = [];     // objetos de la secuencia revelada
-    this.hintTiles   = [];     // fondos de cada componente (para resaltar alineados)
+  // después de cada paso: ¿sigue por la ruta? si no, buscar otra desde acá
+  _avanzarRuta() {
+    const h = this.snake[0];
+    const sig = this.ruta && this.ruta[this.rutaPos + 1];
+    if (sig && sig.c === h.c && sig.r === h.r) this.rutaPos++;
+    else this._fijarRuta(this._resolver(this.snake, 12, 80000));
+    this._dibujarCamino();
+  }
 
-    // botón de pista a la izquierda; la secuencia se dibuja a su derecha
-    const zoneLeft = isMobile ? 150 : 10;
-    const btnW = isMobile ? 96 : 120, btnH = isMobile ? 30 : 34;
-    this.seqStartX = zoneLeft + btnW + (isMobile ? 10 : 20);
+  // ¿el cuerpo `sn` deja cada pieza en su hueco?
+  _conectadoEn(sn) {
+    return this.SNAKE_MAP.every((sm, i) => !sm.comp || this._tipoEn.get(`${sn[i].c},${sn[i].r}`) === sm.comp);
+  }
 
-    this.pistaBg = this.add.rectangle(zoneLeft, this.hintCy, btnW, btnH, 0x12122a)
-      .setOrigin(0, 0.5).setStrokeStyle(1.5, 0xfff176)
-      .setInteractive({ useHandCursor: true });
-    this.pistaTxt = this.add.text(zoneLeft + btnW / 2, this.hintCy, '', {
-      fontSize: isMobile ? '11px' : '12px', color: '#fff176', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    this.pistaBg.on('pointerover', () => this.pistaBg.setFillStyle(0x1a1a2a));
-    this.pistaBg.on('pointerout',  () => this.pistaBg.setFillStyle(0x12122a));
-    this.pistaBg.on('pointerdown', () => this._revelarPista());
-    this.pistaTxt.setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this._revelarPista());
+  // Cota inferior de pasos que faltan para conectar desde `sn` (nunca se pasa).
+  // Al ganar, cada componente k queda en el índice de cuerpo P[k]; como cada paso empuja
+  // el cuerpo un índice, si la cadena batería…k ya está tendida con k en el índice t,
+  // faltan exactamente P[k] - t pasos (si el siguiente componente sigue alcanzable a
+  // tiempo). Si no hay cadena, hay que ir a la batería y tender todo: dist + P[0].
+  _cotaRestante(sn) {
+    const C = this.COMPONENTS, P = this._pIdx, n = C.length, h = sn[0];
+    const en = (i, cel) => sn[i] && sn[i].c === cel.c && sn[i].r === cel.r;
+    let mejor = Math.abs(h.c - C[0].c) + Math.abs(h.r - C[0].r) + P[0];
+    for (let k = 0; k < n; k++) {
+      const tramo = k < n - 1 ? P[k] - P[k + 1] : 1;
+      for (let t = 0; t <= tramo; t++) {
+        if (!en(t, C[k])) continue;
+        let ok = true;
+        for (let i = 0; i < k && ok; i++) ok = en(t + P[i] - P[k], C[i]);
+        if (!ok) continue;
+        if (k < n - 1 && Math.abs(h.c - C[k + 1].c) + Math.abs(h.r - C[k + 1].r) > tramo - t) continue;
+        mejor = Math.min(mejor, P[k] - t);
+      }
+    }
+    return mejor;
+  }
 
+  // IDA*: devuelve la lista de casillas que tiene que pisar la cabeza, o null.
+  // Mismas reglas que _mover: no salir del tablero ni pisar ninguna parte del cuerpo.
+  _resolver(snake0, extra, presupuesto) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const camino = [];
+    let nodos = 0;
+    const buscar = (sn, g, cota) => {
+      if (this._conectadoEn(sn)) return true;
+      if (++nodos > presupuesto) return false;
+      const h = sn[0], hijos = [];
+      for (const [dc, dr] of dirs) {
+        const c = h.c + dc, r = h.r + dr;
+        if (c < 0 || c >= this.COLS || r < 0 || r >= this.ROWS) continue;
+        if (sn.some(q => q.c === c && q.r === r)) continue;
+        const n2 = [{ c, r }, ...sn.slice(0, -1)];
+        const f = g + 1 + this._cotaRestante(n2);
+        if (f <= cota) hijos.push({ n2, f, c, r });
+      }
+      hijos.sort((a, b) => a.f - b.f);
+      for (const x of hijos) {
+        camino.push({ c: x.c, r: x.r });
+        if (buscar(x.n2, g + 1, cota)) return true;
+        camino.pop();
+        if (nodos > presupuesto) return false;
+      }
+      return false;
+    };
+    const inicio = snake0.map(q => ({ c: q.c, r: q.r }));
+    const h0 = this._cotaRestante(inicio);
+    for (let cota = h0; cota <= h0 + extra; cota++) {
+      camino.length = 0;
+      if (buscar(inicio, 0, cota)) return camino.slice();
+      if (nodos > presupuesto) break;
+    }
+    return null;
+  }
+
+  // sin salida posible: el ↻ late para decir "empezá de nuevo"
+  _marcarAtasco() {
+    if (!this.btnReiniciar) return;
+    if (this._latidoReinicio) { this._latidoReinicio.stop(); this._latidoReinicio = null; this.btnReiniciar.setScale(1); }
+    if (this.atascado && !this.solved) this._latidoReinicio = respirar(this, this.btnReiniciar, 0.14, 380);
+  }
+
+  // Se redibuja en cada paso y sólo hacia adelante: las piedritas que la serpiente
+  // ya pisó no reaparecen cuando la cola se va.
+  _dibujarCamino() {
+    if (!this.caminoGfx) {
+      this.caminoGfx = this.add.graphics().setDepth(Z.camino);
+      // late suave para que se lea como "seguime" y no como decoración
+      this.tweens.add({
+        targets: this.caminoGfx, alpha: { from: 0.5, to: 1 },
+        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      });
+    }
+    const g = this.caminoGfx;
+    g.clear();
+    if (!this.mostrarCamino || this.solved || !this.ruta) return;
+
+    const rr = Math.max(4, this.TILE * 0.11);
+    for (let i = this.rutaPos + 1; i < this.ruta.length; i++) {
+      const cl = this.ruta[i];
+      if (this._tipoEn.has(`${cl.c},${cl.r}`)) continue;   // nunca una piedrita sobre una pieza
+      const color = this.rutaColor[i];
+      const p = this._celdaCentro(cl.c, cl.r);
+      g.fillStyle(oscurecer(color, 0.7), 1); g.fillCircle(p.x, p.y + 2, rr);
+      g.fillStyle(color, 1);                 g.fillCircle(p.x, p.y, rr);
+      g.fillStyle(0xffffff, 0.5);            g.fillCircle(p.x - rr * 0.3, p.y - rr * 0.35, rr * 0.35);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HUD — sólo iconos
+  // ─────────────────────────────────────────────────────────────────────────
+  // Antes: "★ 1240 pts", "mov: 6", "⏱ 0:05", "salir" en rojo, "R — reiniciar".
+  // Nada de eso le servía a un chico que no lee. Ahora: casita (volver), mapa
+  // (niveles), número de nivel, tres estrellas EN VIVO (se caen si se pasa del
+  // óptimo: "más corto = mejor" sin una sola palabra), reiniciar, pista y sonido.
+  _crearHUD(ctrlX) {
+    const y = 38;
+    boton(this, 40, y, { w: 54, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }).setDepth(Z.hud);
+    boton(this, 102, y, { w: 54, fill: CLAY.lila, icono: 'mapa',
+      onTap: () => irA(this, 'LevelSelectScene', { desde: this.nivelIdx }) }).setDepth(Z.hud);
+
+    // número de nivel + estrellas en vivo, centrados sobre el tablero
+    const cx = ctrlX / 2 + 50;
+    const pill = this.add.container(cx - 92, y).setDepth(Z.hud);
+    pill.add(losa(this, 0, 0, 58, 54, { fill: CLAY.cremaClaro, r: 18, canto: 6, grosor: 3 }));
+    pill.add(this.add.text(0, -3, `${this.nivelIdx + 1}`, estiloTexto(26, hex(CLAY.bordeOscuro), '#fff6e0', 2)).setOrigin(0.5));
+
+    this.estrellasVivas = 3;
+    this.estrellasHUD = [];
+    for (let i = 0; i < 3; i++) {
+      const st = estrella(this, cx - 30 + i * 46, y - 2, true, 40).setDepth(Z.hud);
+      this.estrellasHUD.push(st);
+    }
+
+    // reiniciar · pista · sonido sobre la columna del pad
+    this.btnReiniciar = boton(this, ctrlX + 46, y, { w: 54, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }).setDepth(Z.hud);
+
+    this.pistaBtn = boton(this, ctrlX + 110, y, {
+      w: 54, fill: CLAY.verde, imagen: 'pista', sonido: null, onTap: () => this._revelarPista(),
+    }).setDepth(Z.hud);
+    this.pistaBadge = insignia(this, ctrlX + 130, y - 20, GameState.pistas).setDepth(Z.hud + 1);
+
+    botonSonido(this, ctrlX + 172, y, 46, Z.hud);
     this._dibujarBotonPista();
+  }
+
+  // estrellas que ganaría si terminara AHORA con estos movimientos
+  _estrellasPara(mov) {
+    return mov <= this.OPTIMO ? 3 : mov <= Math.ceil(this.OPTIMO * 1.25) ? 2 : 1;
+  }
+
+  _actualizarEstrellasHUD() {
+    const ahora = this._estrellasPara(this.moveCount);
+    if (ahora >= this.estrellasVivas) return;
+    // se cae la estrella: rueda hacia abajo, se apaga y queda la vacía en su lugar
+    for (let i = ahora; i < this.estrellasVivas; i++) {
+      const vieja = this.estrellasHUD[i];
+      const vacia = estrella(this, vieja.x, vieja.y, false, 40).setDepth(Z.hud).setAlpha(0);
+      this.tweens.add({ targets: vacia, alpha: 1, duration: 300, delay: 200 });
+      this.tweens.add({
+        targets: vieja, y: vieja.y + 40, angle: 120, alpha: 0, duration: 500, ease: 'Quad.easeIn',
+        onComplete: () => vieja.destroy(),
+      });
+      this.estrellasHUD[i] = vacia;
+    }
+    this.estrellasVivas = ahora;
+    Sonido.estrellaPerdida();
   }
 
   _dibujarBotonPista() {
     const n = GameState.pistas;
-    if (this.pistaRevelada) {
-      this.pistaTxt.setText(`pista (${n})`);
-      this.pistaTxt.setColor('#4caf50');
-      this.pistaBg.setStrokeStyle(1.5, 0x4caf50);
-    } else if (this.mostrarCamino) {
-      // el camino ya está a la vista (niveles iniciales): no tiene sentido cobrar por él
-      this.pistaTxt.setText('💡 sigue las luces');
-      this.pistaTxt.setColor('#a5d6a7');
-      this.pistaBg.setStrokeStyle(1.5, 0xa5d6a7);
-    } else if (n > 0) {
-      this.pistaTxt.setText(`💡 pista (${n})`);
-      this.pistaTxt.setColor('#fff176');
-      this.pistaBg.setStrokeStyle(1.5, 0xfff176);
-    } else {
-      this.pistaTxt.setText('🔒 conseguir');
-      this.pistaTxt.setColor('#4fc3f7');
-      this.pistaBg.setStrokeStyle(1.5, 0x4fc3f7);
-    }
+    // en los niveles iniciales el camino ya está a la vista: no hay nada que pedir
+    this.pistaBtn.setVisible(!this.caminoGratis);
+    this.pistaBadge.setVisible(!this.caminoGratis && !this.pistaRevelada);
+    this.pistaBtn.setDeshabilitado(this.pistaRevelada);
+    this.pistaBadge.setTexto(n > 0 ? n : '+');
   }
 
   _revelarPista() {
-    if (this.pistaRevelada) return;
-    // en los niveles iniciales el camino ya está a la vista: el botón es un cartel,
-    // no cobra nada ni manda a la tienda
-    if (this.mostrarCamino) return;
+    if (this.pistaRevelada || this.caminoGratis || this.solved) return;
     if (GameState.pistas > 0) {
       GameState.usarPista();
+      Sonido.ding(4);
       this.pistaRevelada = true;
       this.mostrarCamino = true;      // la pista enciende también el camino en el tablero
       this._dibujarCamino();
-      this._dibujarSecuenciaPista();
-      this._actualizarHintTiles();
+      this._crearBandeja();
       this._dibujarBotonPista();
     } else {
       // sin pistas → a la tienda a comprar más
-      this.scene.start('StoreScene', { cat: 'mejoras' });
+      Sonido.click();
+      irA(this, 'StoreScene', { cat: 'mejoras' });
     }
   }
 
-  // dibuja SOLO la secuencia de componentes en orden (sin huecos ni cabeza)
-  _dibujarSecuenciaPista() {
-    this.hintSeqObjs.forEach(o => o.destroy());
-    this.hintSeqObjs = [];
-    this.hintTiles   = [];
+  // ─────────────────────────────────────────────────────────────────────────
+  // Bandeja: la secuencia de piezas en orden (abajo del tablero)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Se ve cuando el camino se ve (gratis o con pista). Cada pieza se marca con un
+  // tilde verde cuando queda conectada: progreso sin números.
+  _crearBandeja() {
+    if (this.bandejaObjs) this.bandejaObjs.forEach(o => o.destroy());
+    this.bandejaObjs  = [];
+    this.bandejaAros  = [];
+    if (!this.mostrarCamino) return;
 
-    const isMobile = window.isMobile || false;
-    const tileW = isMobile ? 40 : 48, gap = isMobile ? 8 : 12;
-    const tileH = isMobile ? 46 : 52;
-    const cy    = this.hintCy;
-    const comps = this.COMPONENTS;  // ya ordenado por order
+    const comps = this.COMPONENTS;
+    const n     = comps.length;
+    const paso  = Math.min(64, (this.CTRL_X - 60) / n);
+    const ancho = paso * n + 24;
+    const cx    = this.CTRL_X / 2;
+    const y     = this.TRAY_Y;
+
+    const fondo = losa(this, cx, y + 3, ancho, 62, { fill: CLAY.madera, r: 22, canto: 6, grosor: 3, brillo: 0.15 });
+    this.bandejaObjs.push(fondo.setDepth(Z.hud));
 
     comps.forEach((comp, i) => {
-      const def = this._compDef(comp.sym);
-      const col = `#${def.color.toString(16).padStart(6,'0')}`;
-      const hx  = this.seqStartX + i * (tileW + gap);
-      const hcx = hx + tileW / 2;
+      const x = cx - ancho / 2 + 12 + paso * i + paso / 2;
+      if (i < n - 1) {
+        const f = this.add.graphics().setDepth(Z.hud);
+        f.fillStyle(0xfff3d6, 0.9);
+        const ax = x + paso / 2;
+        f.fillTriangle(ax - 4, y - 6, ax + 5, y, ax - 4, y + 6);
+        this.bandejaObjs.push(f);
+      }
+      const aro = this.add.graphics({ x, y }).setDepth(Z.hud);
+      this.bandejaAros.push(aro);
+      const img = this._spriteComp(comp.sym, x, y, Math.min(40, paso * 0.66), false);
+      if (img) this.bandejaObjs.push(img.setDepth(Z.hud + 1));
+      this.bandejaObjs.push(aro);
+    });
+    this._actualizarBandeja();
+  }
 
-      const bg = this.add.rectangle(hcx, cy, tileW, tileH, 0x12122a)
-        .setStrokeStyle(1.5, def.color);
-      this.hintTiles.push(bg);
-      this.hintSeqObjs.push(bg);
-
-      // etiqueta arriba (distingue BAT vs LED, ambos círculos)
-      const lbl = this.add.text(hcx, cy - tileH / 2 + 8, def.label, {
-        fontSize: '8px', color: col, fontFamily: FUENTE
-      }).setOrigin(0.5);
-      this.hintSeqObjs.push(lbl);
-
-      // símbolo al centro
-      const symObjs = this._dibujarSimbolo(comp.sym, hcx, cy - 1, tileW * 0.18, def.color, false);
-      this.hintSeqObjs.push(...symObjs);
-
-      // número de orden — grande
-      const num = this.add.text(hcx, cy + tileH / 2 - 9, `${comp.order}`, {
-        fontSize: isMobile ? '14px' : '16px', color: '#ffffff', fontFamily: FUENTE,
-        stroke: '#000000', strokeThickness: 3
-      }).setOrigin(0.5);
-      this.hintSeqObjs.push(num);
-
-      // flecha de secuencia
-      if (i < comps.length - 1) {
-        const arrow = this.add.text(hx + tileW + gap / 2, cy, '›', {
-          fontSize: '16px', color: '#555', fontFamily: FUENTE
-        }).setOrigin(0.5);
-        this.hintSeqObjs.push(arrow);
+  _actualizarBandeja() {
+    if (!this.bandejaAros || !this.bandejaAros.length) return;
+    const r = Math.min(24, (Math.min(64, (this.CTRL_X - 60) / this.COMPONENTS.length)) * 0.42);
+    this.COMPONENTS.forEach((comp, i) => {
+      const aro = this.bandejaAros[i];
+      if (!aro) return;
+      const segIdx = this.SNAKE_MAP.findIndex(sm => sm.comp && sm.order === comp.order);
+      const ok = segIdx >= 0 && this._segmentoAlineado(segIdx);
+      aro.clear();
+      aro.fillStyle(ok ? 0xd8f0c0 : CLAY.cremaClaro, 1); aro.fillCircle(0, 0, r);
+      aro.lineStyle(3, ok ? 0x5a9a3a : CLAY.bordeOscuro, 1); aro.strokeCircle(0, 0, r);
+      if (ok) {
+        aro.fillStyle(0x5a9a3a, 1); aro.fillCircle(r * 0.7, -r * 0.7, 8);
+        aro.lineStyle(2.5, 0xffffff, 1);
+        aro.beginPath(); aro.moveTo(r * 0.7 - 4, -r * 0.7); aro.lineTo(r * 0.7 - 1, -r * 0.7 + 3); aro.lineTo(r * 0.7 + 4, -r * 0.7 - 3); aro.strokePath();
       }
     });
   }
 
-  _actualizarHintTiles() {
-    if (!this.pistaRevelada || !this.hintTiles.length) return;
-    this.COMPONENTS.forEach((comp, i) => {
-      const tile = this.hintTiles[i];
-      if (!tile) return;
-      const segIdx = this.SNAKE_MAP.findIndex(sm => sm.comp && sm.order === comp.order);
-      const alineado = segIdx >= 0 && this._segmentoAlineado(segIdx);
-      tile.setFillStyle(alineado ? 0x0a1e0a : 0x12122a);
-      tile.setStrokeStyle(alineado ? 2.5 : 1.5,
-        alineado ? 0x4caf50 : this._compDef(comp.sym).color);
-    });
-  }
-
-  // ── controles — zona derecha centrada ──
+  // ─────────────────────────────────────────────────────────────────────────
+  // Controles — pad de flechas de plastilina
+  // ─────────────────────────────────────────────────────────────────────────
   _crearControles(ctrlX, width, hudH, height) {
-    const isMobile = window.isMobile || false;
-    const btnSz  = isMobile ? 30 : 46;
-    const gap    = isMobile ? 3  : 5;
-    const zoneCX = ctrlX + (width - ctrlX) / 2;
-    const padCY  = hudH + 40 + (height - hudH - 40 - 20 - btnSz) / 2 + btnSz / 2 + 30;
-    // posición del pad
-    // pad centrado verticalmente en la zona inferior
-    // zona inferior empieza en height-HINT_H = height-110
-    // pad height total = btnSz*3 + gap*2
-    const padTotalH = btnSz * 3 + gap * 2;
-    const zoneStart = isMobile ? height - 110 : 0;
-    const padX = isMobile ? btnSz + gap + 6 : zoneCX;
-    const padY = isMobile ? zoneStart + (110 - padTotalH) / 2 + padTotalH / 2 : padCY;
+    const S    = 76;                       // tamaño de cada flecha (manos chiquitas)
+    const sep  = S * 0.9;
+    const cx   = ctrlX + (width - ctrlX) / 2;
+    const cy   = hudH + (height - hudH) / 2 + 10;
+
+    // base del pad: un platito de madera
+    losa(this, cx, cy + 6, (sep + S / 2) * 2 + 12, (sep + S / 2) * 2 + 12, { fill: CLAY.madera, r: sep + S / 2 + 6, canto: 10, grosor: 4, brillo: 0.12 })
+      .setDepth(Z.hud - 1).setAlpha(0.9);
 
     const dirs = [
-      { label: '▲', key: 'btn_up',    dc:  0, dr: -1, x: padX,              y: padY - btnSz - gap },
-      { label: '▼', key: 'btn_down',  dc:  0, dr:  1, x: padX,              y: padY + btnSz + gap },
-      { label: '◀', key: 'btn_left',  dc: -1, dr:  0, x: padX - btnSz - gap, y: padY },
-      { label: '▶', key: 'btn_right', dc:  1, dr:  0, x: padX + btnSz + gap, y: padY },
+      { label: '▲', key: 'btn_up',    dc:  0, dr: -1, x: cx,       y: cy - sep },
+      { label: '▼', key: 'btn_down',  dc:  0, dr:  1, x: cx,       y: cy + sep },
+      { label: '◀', key: 'btn_left',  dc: -1, dr:  0, x: cx - sep, y: cy },
+      { label: '▶', key: 'btn_right', dc:  1, dr:  0, x: cx + sep, y: cy },
     ];
 
+    this.flechas = {};
     dirs.forEach(d => {
-      const btn = this.add.rectangle(d.x, d.y, btnSz, btnSz, 0x12122a)
-        .setStrokeStyle(1.5, 0x2a2a5a)
-        .setInteractive({ useHandCursor: true });
-      // flecha: sprite (ui.btn_*) o glifo de texto como fallback
-      const arr = SpriteConfig.colocar(this, 'ui', d.key, d.x, d.y, () => this.add.text(d.x, d.y, d.label, {
-        fontSize: '22px', color: '#4fc3f7', fontFamily: FUENTE
-      }).setOrigin(0.5));
-      if (arr instanceof Phaser.GameObjects.Image) arr.setDisplaySize(btnSz * 1.3, btnSz * 1.3);
-      btn.on('pointerdown', () => this._mover(d.dc, d.dr));
-      btn.on('pointerover',  () => { btn.setFillStyle(0x1a1a3a); btn.setStrokeStyle(1.5, 0x4fc3f7); });
-      btn.on('pointerout',   () => { btn.setFillStyle(0x12122a); btn.setStrokeStyle(1.5, 0x2a2a5a); });
+      const c = this.add.container(d.x, d.y).setDepth(Z.hud);
+      const sombra = this.add.ellipse(0, S * 0.42, S * 0.8, S * 0.22, 0x1a0e06, 0.35);
+      c.add(sombra);
+      const k = SpriteConfig.get('ui', d.key);
+      if (k && this.textures.exists(k)) {
+        c.add(this.add.image(0, 0, k).setDisplaySize(S, S));
+      } else {
+        c.add(losa(this, 0, 0, S * 0.8, S * 0.8, { fill: CLAY.naranja, r: S * 0.4 }));
+        c.add(this.add.text(0, -4, d.label, estiloTexto(30)).setOrigin(0.5));
+      }
+      c.setSize(S, S).setInteractive({ useHandCursor: true });
+      c.on('pointerdown', () => {
+        this.tweens.killTweensOf(c);
+        c.setScale(1.1, 0.84);
+        this.tweens.add({ targets: c, scaleX: 1, scaleY: 1, duration: 220, ease: 'Back.easeOut' });
+        this._mover(d.dc, d.dr);
+      });
+      this.flechas[`${d.dc},${d.dr}`] = c;
     });
-
-    // reiniciar — en móvil a la derecha del pad, en desktop debajo
-    const rstY = isMobile ? padY + btnSz + gap + btnSz + 20 : padCY + btnSz + gap + btnSz + 20;
-    const rstX = isMobile ? padX : zoneCX;
-    const rstBg = this.add.rectangle(rstX, rstY, 110, 26, 0x12122a)
-      .setStrokeStyle(1, 0x333355)
-      .setInteractive({ useHandCursor: true });
-    const rstTxt = this.add.text(rstX, rstY, 'R — reiniciar', {
-      fontSize: '11px', color: '#555', fontFamily: FUENTE
-    }).setOrigin(0.5);
-    rstBg.on('pointerover',  () => { rstBg.setFillStyle(0x1a1a2a); rstTxt.setColor('#888'); });
-    rstBg.on('pointerout',   () => { rstBg.setFillStyle(0x12122a); rstTxt.setColor('#555'); });
-    rstBg.on('pointerdown',  () => this._reiniciar());
-    rstTxt.setInteractive({ useHandCursor: true });
-    rstTxt.on('pointerdown', () => this._reiniciar());
-
-    // en móvil también mover el status text arriba del pad
-    if (isMobile && this.statusTxt) {
-      this.statusTxt.setPosition(padX, padY - btnSz * 3);
-      this.statusTxt.setOrigin(0.5, 0);
-    }
   }
 
   // ── partículas / energía ──
   _crearParticulas() {
-    // textura blanca generada en runtime (sin assets) — se tiñe con `tint`
-    if (!this.textures.exists('chispa')) {
-      const g = this.make.graphics({ add: false });
-      g.fillStyle(0xffffff, 1); g.fillCircle(8, 8, 8);
-      g.fillStyle(0xffffff, 0.4); g.fillCircle(8, 8, 5);
-      g.generateTexture('chispa', 16, 16);
-      g.destroy();
-    }
-    // emisor de energía persistente (sobrevive a los redibujados por paso)
+    // emisor de energía persistente en la cabeza (sobrevive a los redibujados por paso)
     this.energyEmitter = this.add.particles(0, 0, 'chispa', {
-      speed:     { min: 8, max: 36 },
+      speed:     { min: 10, max: 40 },
       angle:     { min: 0, max: 360 },
-      scale:     { start: 0.5, end: 0 },
-      alpha:     { start: 0.9, end: 0 },
-      lifespan:  500,
-      frequency: 55,
+      scale:     { start: 0.55, end: 0 },
+      alpha:     { start: 1, end: 0 },
+      lifespan:  520,
+      frequency: 50,
       quantity:  1,
-      tint:      0x4fc3f7,
-      blendMode: 'ADD',
+      tint:      [SERP.energia, 0xffffff, 0xffb84a],
       emitting:  false,
     });
-    this.energyEmitter.setDepth(100);
+    this.energyEmitter.setDepth(Z.particulas);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Dibujo dinámico: serpiente + componentes (se redibuja en cada paso)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // centro en pixeles de una celda del grid
+  _celdaCentro(c, r) {
+    const T = this.TILE;
+    return {
+      x: this.originX + c * (T + this.GAP) + T / 2,
+      y: this.originY + r * (T + this.GAP) + T / 2 - 2,
+    };
+  }
+
+  // sprite de un componente (o figura de respaldo) de tamaño `sz` centrado en (x,y)
+  _spriteComp(sym, x, y, sz, swCerrado) {
+    const def = this._compDef(sym);
+    const nombre = sym === 's' && swCerrado ? 'switch_on' : def.sprite;
+    const key = SpriteConfig.get('componentes', nombre);
+    if (key && this.textures.exists(key)) return this.add.image(x, y, key).setDisplaySize(sz, sz);
+    const g = this.add.graphics({ x, y });
+    g.fillStyle(def.color, 1); g.fillCircle(0, 0, sz * 0.36);
+    g.lineStyle(3, oscurecer(def.color), 1); g.strokeCircle(0, 0, sz * 0.36);
+    return g;
+  }
+
+  // Puntos de la serpiente sin repetir casilla (al nacer está toda apilada en una).
+  // Cada punto guarda el primer índice de segmento que cae ahí.
+  _puntosSerpiente(desde = 0, hasta = this.snake.length - 1) {
+    const pts = [];
+    for (let i = desde; i <= hasta; i++) {
+      const s = this.snake[i];
+      const ult = pts[pts.length - 1];
+      if (!ult || ult.c !== s.c || ult.r !== s.r) {
+        const p = this._celdaCentro(s.c, s.r);
+        pts.push({ c: s.c, r: s.r, i, x: p.x, y: p.y });
+      }
+    }
+    return pts;
+  }
+
+  // Tubo de plastilina por una lista de puntos: líneas gruesas + círculos en las
+  // juntas (Graphics no tiene uniones redondeadas). Si `cola`, el último tramo se
+  // afina hasta una punta.
+  _tubo(g, pts, ancho, color, alpha = 1, cola = false) {
+    if (!pts.length) return;
+    g.fillStyle(color, alpha);
+    g.lineStyle(ancho, color, alpha);
+    const n = pts.length;
+    const hastaFull = cola && n >= 2 ? n - 2 : n - 1;
+    for (let k = 0; k < hastaFull; k++) {
+      g.beginPath(); g.moveTo(pts[k].x, pts[k].y); g.lineTo(pts[k + 1].x, pts[k + 1].y); g.strokePath();
+    }
+    for (let k = 0; k <= hastaFull; k++) g.fillCircle(pts[k].x, pts[k].y, ancho / 2);
+    if (cola && n >= 2) {
+      const a = pts[n - 2], b = pts[n - 1];
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+      const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+      const tipX = b.x + ux * this.TILE * 0.18, tipY = b.y + uy * this.TILE * 0.18;
+      const w0 = ancho / 2;
+      g.fillPoints([
+        { x: a.x + nx * w0, y: a.y + ny * w0 },
+        { x: b.x + nx * w0 * 0.45, y: b.y + ny * w0 * 0.45 },
+        { x: tipX, y: tipY },
+        { x: b.x - nx * w0 * 0.45, y: b.y - ny * w0 * 0.45 },
+        { x: a.x - nx * w0, y: a.y - ny * w0 },
+      ], true);
+    }
+  }
+
+  _dibujarSerpiente() {
+    const T = this.TILE;
+    const g = this.serpGfx;
+    g.clear();
+    const pts = this._puntosSerpiente();
+
+    // sombra, contorno, cuerpo y brillo — cuatro pasadas del mismo tubo
+    this._tubo(g, pts.map(p => ({ x: p.x + 2, y: p.y + 5 })), T * 0.62, 0x1a0e06, 0.22, true);
+    this._tubo(g, pts, T * 0.64, SERP.contorno, 1, true);
+    this._tubo(g, pts, T * 0.5,  SERP.cuerpo,   1, true);
+    g.lineStyle(T * 0.1, 0xffffff, 0.28);
+    for (let k = 0; k < pts.length - 1; k++) {
+      g.beginPath(); g.moveTo(pts[k].x, pts[k].y - T * 0.1); g.lineTo(pts[k + 1].x, pts[k + 1].y - T * 0.1); g.strokePath();
+    }
+
+    // corriente: el tramo energizado [lowerIdx..contactIdx] brilla amarillo
+    const e = this.energiaGfx;
+    e.clear();
+    const todoEncendido = this.solved;
+    if (todoEncendido || (this.contactIdx >= 0)) {
+      const desde = todoEncendido ? 0 : this.lowerIdx;
+      const hasta = todoEncendido ? this.snake.length - 1 : this.contactIdx;
+      const ep = this._puntosSerpiente(desde, hasta);
+      this._tubo(e, ep, T * 0.3, SERP.energia, 0.9);
+      this._tubo(e, ep, T * 0.12, 0xffffff, 0.8);
+    }
+
+    // cabeza: un sprite persistente que se desliza de casilla en casilla
+    const h = this.snake[0];
+    const p = this._celdaCentro(h.c, h.r);
+    if (!this.cabeza) {
+      this.cabeza = this._crearCabeza(p.x, p.y);
+    } else if (this.cabeza.x !== p.x || this.cabeza.y !== p.y) {
+      this.tweens.killTweensOf(this.cabeza);
+      this.tweens.add({ targets: this.cabeza, x: p.x, y: p.y, duration: 90, ease: 'Quad.easeOut' });
+      // "estirón" en la dirección del paso
+      const horizontal = this.headDir.dr === 0;
+      const sx = this.cabeza._escala, sy = this.cabeza._escala;
+      this.cabeza.setScale(sx * (horizontal ? 1.18 : 0.88), sy * (horizontal ? 0.88 : 1.18));
+      this.tweens.add({ targets: this.cabeza, scaleX: sx, scaleY: sy, duration: 200, ease: 'Back.easeOut' });
+    }
+    this._orientarCabeza();
+  }
+
+  _crearCabeza(x, y) {
+    const T = this.TILE;
+    let key = SpriteConfig.get('serpiente', 'cabeza');
+    if (!key || !this.textures.exists(key)) {
+      // respaldo: carita de plastilina mirando a la derecha
+      key = 'cabeza_respaldo';
+      if (!this.textures.exists(key)) {
+        const g = this.make.graphics({ add: false });
+        g.fillStyle(SERP.contorno, 1); g.fillEllipse(50, 50, 96, 80);
+        g.fillStyle(SERP.cuerpo, 1);   g.fillEllipse(50, 48, 86, 70);
+        g.fillStyle(0xffffff, 1); g.fillCircle(62, 34, 11); g.fillCircle(62, 62, 11);
+        g.fillStyle(0x1a0e06, 1); g.fillCircle(66, 34, 5);  g.fillCircle(66, 62, 5);
+        g.generateTexture(key, 100, 100); g.destroy();
+      }
+    }
+    const img = this.add.image(x, y, key).setDepth(Z.cabeza);
+    img._escala = (T * 1.12) / Math.max(img.width, img.height);
+    img.setScale(img._escala);
+    return img;
+  }
+
+  // el arte mira a la derecha: izquierda se espeja (no se rota, si no queda panza arriba)
+  _orientarCabeza() {
+    const { dc, dr } = this.headDir;
+    const c = this.cabeza;
+    if (!c) return;
+    c.setFlipX(dc === -1);
+    c.setAngle(dr === 1 ? 90 : dr === -1 ? -90 : 0);
+  }
+
+  _dibujarGrid() {
+    this._dibujarSerpiente();
+
+    const T = this.TILE;
+    // limpiar lo del paso anterior
+    Object.values(this.tileObjects).forEach(arr => arr.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); }));
+    this.tileObjects = {};
+    const reg = (key, ...objs) => { (this.tileObjects[key] ||= []).push(...objs); };
+
+    // ── piezas que lleva la serpiente en el cuerpo (bolitas con la pieza encima) ──
+    // Son la otra mitad del puzzle: QUÉ parte del cuerpo tiene que caer en cada hueco.
+    const pts = this._puntosSerpiente();
+    pts.forEach(pt => {
+      if (pt.i === 0) return;                               // la cabeza no lleva nada
+      const sm = this.SNAKE_MAP[pt.i];
+      if (!sm || !sm.sym || this._segmentoAlineado(pt.i)) return;  // alineada → la dibuja el tablero
+      const k = `${pt.c},${pt.r}`;
+      const bola = this.add.circle(pt.x, pt.y, T * 0.24, 0xffffff, 0.85).setDepth(Z.carga).setStrokeStyle(2.5, sm.color);
+      const img  = this._spriteComp(sm.sym, pt.x, pt.y, T * 0.42, false).setDepth(Z.carga);
+      reg(k, bola, img);
+    });
+
+    // ── componentes del tablero ──
+    this.COMPONENTS.forEach(comp => {
+      const k   = `${comp.c},${comp.r}`;
+      const p   = this._celdaCentro(comp.c, comp.r);
+      const def = this._compDef(comp.sym);
+      const si  = this.snake.findIndex(s => s.c === comp.c && s.r === comp.r);
+      const alineado = si >= 0 && this._segmentoAlineado(si);
+      const tapado   = si >= 0 && !alineado;
+      const cerrado  = this.switchStates[k];
+
+      if (alineado || this.solved) {
+        // encendido: aura del color de la pieza latiendo debajo
+        const aura = this.add.circle(p.x, p.y, T * 0.5, def.color, 0.45).setDepth(Z.aura);
+        this.tweens.add({
+          targets: aura, scale: { from: 0.85, to: 1.12 }, alpha: { from: 0.55, to: 0.2 },
+          duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+        const img = this._spriteComp(comp.sym, p.x, p.y, T * 0.84, cerrado).setDepth(Z.compArriba);
+        reg(k, aura, img);
+      } else {
+        const img = this._spriteComp(comp.sym, p.x, p.y, tapado ? T * 0.6 : T * 0.8, cerrado)
+          .setDepth(tapado ? Z.compArriba : Z.comp).setAlpha(tapado ? 0.75 : 1);
+        reg(k, img);
+
+        // ── el próximo componente salta: "andá acá ahora" ──
+        // Es la guía que enseña el orden sin números. Empieza en la batería (siempre
+        // primera) y va saltando sola. No dice el camino, sólo el destino: rutear la
+        // serpiente sigue siendo del chico.
+        const esProximo = !this.solved && this.COMPONENTS[this.proximoComp] === comp;
+        if (esProximo && !tapado) {
+          const aro = this.add.circle(p.x, p.y, T * 0.46).setStrokeStyle(4, def.color, 1).setDepth(Z.aura);
+          this.tweens.add({
+            targets: aro, scale: { from: 0.9, to: 1.25 }, alpha: { from: 1, to: 0 },
+            duration: 900, repeat: -1, ease: 'Quad.easeOut',
+          });
+          const yBase = img.y;
+          this.tweens.add({
+            targets: img, y: yBase - T * 0.12, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+          });
+          reg(k, aro);
+        }
+      }
+
+      // número de orden: chiquito en la esquina (al que ya lee le sirve; al que no, no estorba)
+      if (!this.solved) {
+        const tx = this.originX + comp.c * (T + this.GAP);
+        const ty = this.originY + comp.r * (T + this.GAP);
+        const cr = Math.max(9, T * 0.15);
+        const chip = this.add.circle(tx + T - cr * 0.7, ty + cr * 0.7, cr, CLAY.cremaClaro).setStrokeStyle(2, def.color).setDepth(Z.chip);
+        const num  = this.add.text(chip.x, chip.y, `${comp.order}`, {
+          fontSize: `${Math.round(cr * 1.25)}px`, color: hex(oscurecer(def.color, 0.6)), fontFamily: FUENTE, fontStyle: '600',
+        }).setOrigin(0.5).setDepth(Z.chip);
+        reg(k, chip, num);
+      }
+
+      // switch listo para tocar: ondas que dicen "tocame"
+      if (comp.sym === 's' && this.connected && !this.solved) {
+        if (!cerrado) {
+          const onda = this.add.circle(p.x, p.y, T * 0.4).setStrokeStyle(5, 0xffffff, 1).setDepth(Z.chip);
+          this.tweens.add({ targets: onda, scale: { from: 0.8, to: 1.5 }, alpha: { from: 1, to: 0 }, duration: 800, repeat: -1 });
+          reg(k, onda);
+        }
+        const zone = this.add.rectangle(p.x, p.y, T, T, 0xffffff, 0).setDepth(Z.zona)
+          .setInteractive({ useHandCursor: true });
+        zone.on('pointerdown', () => this._toggleSwitch(k));
+        reg(k, zone);
+      }
+    });
   }
 
   // calcula qué parte de la serpiente tiene corriente.
@@ -893,27 +951,6 @@ export default class PuzzleScene extends Phaser.Scene {
     this.energized = contact >= 0;
   }
 
-  // anillo breve en la cabeza al moverse (sensación de paso)
-  _popCabeza() {
-    const head = this.snake[0];
-    const p = this._celdaCentro(head.c, head.r);
-    const ring = this.add.circle(p.x, p.y, this.TILE * 0.3, 0x4fc3f7, 0.35)
-      .setBlendMode(Phaser.BlendModes.ADD).setDepth(98);
-    this.tweens.add({
-      targets: ring, scale: 1.6, alpha: 0, duration: 220, ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy()
-    });
-  }
-
-  // centro en pixeles de una celda del grid
-  _celdaCentro(c, r) {
-    const T = this.TILE;
-    return {
-      x: this.originX + c * (T + this.GAP) + T / 2,
-      y: this.originY + r * (T + this.GAP) + T / 2,
-    };
-  }
-
   // reubica el emisor de energía en la cabeza y lo enciende/apaga según `energized`
   _actualizarEnergia() {
     if (!this.energyEmitter) return;
@@ -931,44 +968,22 @@ export default class PuzzleScene extends Phaser.Scene {
   // ráfaga corta de partículas + flash cuando un componente se alinea ("se enciende")
   _chispazo(c, r, color) {
     const p = this._celdaCentro(c, r);
-    const burst = this.add.particles(p.x, p.y, 'chispa', {
-      speed:     { min: 30, max: 90 },
-      angle:     { min: 0, max: 360 },
-      scale:     { start: 0.7, end: 0 },
-      alpha:     { start: 1, end: 0 },
-      lifespan:  450,
-      tint:      color,
-      blendMode: 'ADD',
-      emitting:  false,
-    });
-    burst.setDepth(101);
-    burst.explode(14);
-    this.time.delayedCall(550, () => burst.destroy());
-
-    // flash radial
-    const flash = this.add.circle(p.x, p.y, this.TILE * 0.5, color, 0.6).setDepth(99);
+    chispas(this, p.x, p.y, [color, 0xffffff, SERP.energia], { cantidad: 16, velocidad: 110, depth: Z.particulas });
+    const flash = this.add.circle(p.x, p.y, this.TILE * 0.5, 0xffffff, 0.8).setDepth(Z.particulas - 1);
     this.tweens.add({
-      targets: flash, scale: 1.8, alpha: 0, duration: 400,
+      targets: flash, scale: 1.7, alpha: 0, duration: 380,
       onComplete: () => flash.destroy()
     });
   }
 
-  // ráfaga de celebración a lo largo de toda la serpiente
+  // ráfaga de celebración a lo largo de toda la serpiente, de la cola a la cabeza
   _celebrar() {
-    this.snake.forEach((seg, i) => {
-      const sm = this.SNAKE_MAP[i];
-      const color = (sm && sm.color) || 0x4caf50;
-      this.time.delayedCall(i * 35, () => {
+    const pts = this._puntosSerpiente().reverse();
+    pts.forEach((pt, k) => {
+      this.time.delayedCall(k * 45, () => {
         if (!this.scene.isActive()) return;
-        const p = this._celdaCentro(seg.c, seg.r);
-        const burst = this.add.particles(p.x, p.y, 'chispa', {
-          speed: { min: 40, max: 110 }, angle: { min: 0, max: 360 },
-          scale: { start: 0.7, end: 0 }, alpha: { start: 1, end: 0 },
-          lifespan: 600, tint: color, blendMode: 'ADD', emitting: false,
-        });
-        burst.setDepth(101);
-        burst.explode(16);
-        this.time.delayedCall(700, () => burst.destroy());
+        chispas(this, pt.x, pt.y, COLORES_FIESTA, { cantidad: 10, velocidad: 120, depth: Z.particulas });
+        if (k % 2 === 0) Sonido._tono(400 + k * 30, 0.08, { tipo: 'triangle', vol: 0.12 });
       });
     });
   }
@@ -992,49 +1007,71 @@ export default class PuzzleScene extends Phaser.Scene {
     this.switchStates[key] = !this.switchStates[key];
 
     // al cerrar, la energía se libera y fluye más allá del switch → chispazo
-    if (seCierra) {
-      const [c, r] = key.split(',').map(Number);
-      this._chispazo(c, r, 0x4fc3f7);
-    }
+    const [c, r] = key.split(',').map(Number);
+    if (seCierra) { this._chispazo(c, r, SERP.energia); Sonido.chispa(); }
+    else Sonido.click();
 
     this._calcEnergia();  // recalcular la compuerta de energía
     const allClosed = Object.values(this.switchStates).every(v => v === true);
     if (allClosed) this._ganar();
-    else { this._dibujarGrid(); this._actualizarEnergia(); this._actualizarStatus(); }
+    else { this._dibujarGrid(); this._actualizarEnergia(); }
   }
 
   _mover(dc, dr) {
-    if (this.solved) return;
+    if (this.solved || this._saliendo) return;
     const head = this.snake[0];
     const nc   = head.c + dc, nr = head.r + dr;
-    if (nc < 0 || nc >= this.COLS || nr < 0 || nr >= this.ROWS) return;
-    if (this.snake.some(s => s.c === nc && s.r === nr)) return;
+    if (nc < 0 || nc >= this.COLS || nr < 0 || nr >= this.ROWS) { this._chocar(dc, dr); return; }
+    if (this.snake.some(s => s.c === nc && s.r === nr))         { this._chocar(dc, dr); return; }
     this.snake.unshift({ c: nc, r: nr });
     this.snake.pop();
     this.moveCount++;
     this.headDir = { dc, dr };
-    this.moveTxt.setText(`mov: ${this.moveCount}`);
     this.connected = this._checkConectado();
+    Sonido.paso();
+    this._ocultarManito();
+    this._avanzarRuta();
 
     // ¿la cabeza pisó el componente que tocaba? entonces se ilumina el siguiente.
     // Sólo avanza, nunca retrocede: la guía acompaña, no castiga.
     const meta = this.COMPONENTS[this.proximoComp];
-    if (meta && meta.c === nc && meta.r === nr) this.proximoComp++;
+    if (meta && meta.c === nc && meta.r === nr) {
+      this.proximoComp++;
+      Sonido.pop();
+    }
 
     // energía: corriente desde donde la serpiente toca la celda de la batería
     this._calcEnergia();
     // detectar componentes recién alineados para el chispazo
     this._detectarNuevosAlineados();
+    this._actualizarEstrellasHUD();
 
     const hasSwitches = this.COMPONENTS.some(c => c.sym === 's');
     if (this.connected && !hasSwitches) this._ganar();
     else {
       this._dibujarGrid();
-      this._popCabeza();
       this._actualizarEnergia();
-      this._actualizarHintTiles();
-      this._actualizarStatus();
+      this._actualizarBandeja();
+      if (this.connected && hasSwitches) Sonido.ding(6);
+      this._programarManito();
     }
+  }
+
+  // la cabeza se asoma y vuelve: "por ahí no se puede"
+  _chocar(dc, dr) {
+    Sonido.golpe();
+    const c = this.cabeza;
+    if (c) {
+      const h = this._celdaCentro(this.snake[0].c, this.snake[0].r);
+      this.tweens.killTweensOf(c);
+      c.setPosition(h.x, h.y).setScale(c._escala);
+      this.tweens.add({
+        targets: c, x: h.x + dc * this.TILE * 0.18, y: h.y + dr * this.TILE * 0.18,
+        duration: 60, yoyo: true, ease: 'Quad.easeOut',
+      });
+    }
+    const f = this.flechas && this.flechas[`${dc},${dr}`];
+    if (f) sacudir(this, f, 4);
   }
 
   // dispara chispazo en los componentes que pasaron a estar alineados en este paso
@@ -1047,6 +1084,7 @@ export default class PuzzleScene extends Phaser.Scene {
         ahora.add(key);
         if (!this._alineadosPrev.has(key)) {
           this._chispazo(seg.c, seg.r, sm.color);
+          Sonido.ding(sm.order || 0);
         }
       }
     });
@@ -1054,150 +1092,190 @@ export default class PuzzleScene extends Phaser.Scene {
   }
 
   _reiniciar() {
-    this.scene.restart({ nivelIdx: this.nivelIdx });
+    irA(this, 'PuzzleScene', { nivelIdx: this.nivelIdx });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Manito guía (onboarding sin texto)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Si el chico se queda quieto en los primeros niveles, aparece una mano que
+  // señala la flecha que conviene tocar, siguiendo la ruta de piedritas.
+  _programarManito(espera = 3200) {
+    if (this.nivelIdx >= this.NIVELES_CON_MANITO || this.solved) return;
+    if (this._timerManito) this._timerManito.remove();
+    this._timerManito = this.time.delayedCall(espera, () => this._mostrarManito());
+  }
+
+  _ocultarManito() {
+    if (this._timerManito) { this._timerManito.remove(); this._timerManito = null; }
+    if (this.manito) { this.tweens.killTweensOf(this.manito); this.manito.destroy(); this.manito = null; }
+  }
+
+  // dirección sugerida: la siguiente casilla de la ruta (null si no hay salida)
+  _direccionSugerida() {
+    const h = this.snake[0];
+    const sig = this.ruta && this.ruta[this.rutaPos + 1];
+    if (!sig) return null;
+    return { dc: sig.c - h.c, dr: sig.r - h.r };
+  }
+
+  _mostrarManito() {
+    this._ocultarManito();
+    if (this.solved) return;
+    const d = this._direccionSugerida();
+    // sin salida → la mano señala el ↻
+    const f = this.atascado ? this.btnReiniciar : (d && this.flechas[`${d.dc},${d.dr}`]);
+    if (!f) return;
+    const m = this.add.text(f.x + 18, f.y + 46, '👆', { fontSize: '44px' }).setOrigin(0.5).setDepth(Z.manito);
+    this.manito = m;
+    aparecer(this, m);
+    this.tweens.add({ targets: m, y: m.y - 14, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 380 });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Victoria
+  // ─────────────────────────────────────────────────────────────────────────
   _ganar() {
     this.solved = true;
-    if (this.caminoGfx) { this.caminoGfx.destroy(); this.caminoGfx = null; }
+    this._ocultarManito();
+    if (this.caminoGfx) this.caminoGfx.clear();
+    this._marcarAtasco();
     this.tiempoFin = Date.now();
     const segundos = this._segundos();
-    const marca    = GameState.registrarTiempo(this.nivelIdx, segundos);
+    GameState.registrarTiempo(this.nivelIdx, segundos);
     if (this.energyEmitter) this.energyEmitter.emitting = false;
     const puntos     = Math.max(300 - this.moveCount * 5, 20);
-    const eraPrimera = !GameState.nivelesCompletados.includes(this.nivelIdx);
     // estrellas: 3 = óptimo, 2 = hasta +25%, 1 = completado.
     // Se calculan ANTES de completarNivel porque de ellas dependen las monedas.
-    const estrellas  = this.moveCount <= this.OPTIMO ? 3
-                     : this.moveCount <= Math.ceil(this.OPTIMO * 1.25) ? 2 : 1;
+    const estrellas  = this._estrellasPara(this.moveCount);
     const premio     = GameState.completarNivel(this.nivelIdx, puntos, estrellas);  // 0 si no mejoró
-    const ganados    = premio.puntos;
     const monedas    = premio.monedas;
-    const mejor      = GameState.mejorPuntaje[this.nivelIdx] || puntos;
     const mejorEstr  = GameState.registrarEstrellas(this.nivelIdx, estrellas);
+
     this._dibujarGrid();
+    this._actualizarBandeja();
     this._celebrar();
+    Sonido.victoria();
 
+    // el LED se enciende de verdad: un sol rojo-anaranjado que crece
+    const led = this.COMPONENTS[this.COMPONENTS.length - 1];
+    if (led) {
+      const p = this._celdaCentro(led.c, led.r);
+      const luz = this.add.circle(p.x, p.y, this.TILE * 0.6, 0xff6a3c, 0.6).setDepth(Z.aura).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: luz, scale: { from: 0.4, to: 2.2 }, alpha: { from: 0.9, to: 0.25 }, duration: 700, ease: 'Quad.easeOut' });
+    }
+    this.time.delayedCall(450, () => { if (this.scene.isActive()) confeti(this, this.CTRL_X / 2, this.scale.height + 10); });
+    this.time.delayedCall(850, () => {
+      if (this.scene.isActive()) this._panelVictoria(estrellas, monedas, mejorEstr);
+    });
+  }
+
+  _panelVictoria(estrellas, monedas, mejorEstr) {
     const { width, height } = this.scale;
-    const CTRL_X = width - 200;
-    const panelW = Math.min(320, CTRL_X - 40);
-    const panelX = (CTRL_X - panelW) / 2 + panelW / 2;
+    const cx = width / 2, cy = height / 2 + 10;
+    const W = 400, H = 330;
 
-    // todos los objetos del panel se registran para poder cerrarlo con la X
-    const panelObjs = [];
-    const reg = o => { panelObjs.push(o); return o; };
+    const objs = [];
+    const velo = this.add.rectangle(0, 0, width, height, 0x1a0e06, 0.5).setOrigin(0).setDepth(Z.panel)
+      .setInteractive();   // bloquea toques al tablero mientras está el panel
+    velo.setAlpha(0);
+    this.tweens.add({ targets: velo, alpha: 1, duration: 250 });
+    objs.push(velo);
 
-    reg(this.add.rectangle(panelX, height / 2, panelW, 218, 0x080814, 0.97)
-      .setStrokeStyle(2, 0x4caf50));
-    reg(this.add.text(panelX, height / 2 - 88, '¡CIRCUITO COMPLETO!', {
-      fontSize: '17px', color: '#4caf50', fontFamily: FUENTE
-    }).setOrigin(0.5));
+    const panel = this.add.container(cx, cy).setDepth(Z.panel + 1);
+    objs.push(panel);
+    panel.add(losa(this, 0, 0, W, H, { fill: CLAY.cremaClaro, borde: CLAY.borde, r: 34, canto: 12, grosor: 5 }));
+    aparecer(this, panel);
 
-    // ── botón X — cerrar el panel para ver la solución ──
-    const cerrar = reg(this.add.text(panelX + panelW / 2 - 16, height / 2 - 109 + 15, '✕', {
-      fontSize: '16px', color: '#888', fontFamily: FUENTE
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-    cerrar.on('pointerover', () => cerrar.setColor('#ef5350'));
-    cerrar.on('pointerout',  () => cerrar.setColor('#888'));
-    cerrar.on('pointerdown', () => panelObjs.forEach(o => o.destroy()));
+    // el LED encendido corona el panel: "¡prendiste la luz!"
+    const ledK = SpriteConfig.get('componentes', 'led');
+    if (ledK && this.textures.exists(ledK)) {
+      const halo = this.add.circle(0, -H / 2 + 4, 52, 0xffb04a, 0.55);
+      panel.add(halo);
+      this.tweens.add({ targets: halo, scale: { from: 0.9, to: 1.2 }, alpha: { from: 0.6, to: 0.25 }, duration: 600, yoyo: true, repeat: -1 });
+      const led = this.add.image(0, -H / 2 + 4, ledK).setDisplaySize(96, 96);
+      panel.add(led);
+      this.tweens.add({ targets: led, angle: { from: -6, to: 6 }, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
 
-    // ── estrellas (★ ganadas en esta partida) — sprite o glifo ──
-    const fillKey = SpriteConfig.get('ui', 'estrella_llena');
-    if (fillKey && this.textures.exists(fillKey)) {
-      const sz = 28, gap = 8, total = 3 * sz + 2 * gap;
-      const sx = panelX - total / 2 + sz / 2;
-      for (let i = 0; i < 3; i++) {
-        const name = i < estrellas ? 'estrella_llena' : 'estrella_vacia';
-        const im = SpriteConfig.colocar(this, 'ui', name, sx + i * (sz + gap), height / 2 - 60, null);
-        if (im) {
-          reg(im).setDisplaySize(sz, sz).setAlpha(0);
-          this.tweens.add({ targets: im, alpha: 1, duration: 300, delay: i * 80, ease: 'Back.easeOut' });
-        }
+    // ── estrellas: caen de a una con su nota ──
+    const yE = -H / 2 + 104;
+    for (let i = 0; i < 3; i++) {
+      const x = (i - 1) * 92;
+      const tam = i === 1 ? 84 : 70;
+      const yy = yE + (i === 1 ? -10 : 0);
+      const vacia = estrella(this, x, yy, false, tam);
+      panel.add(vacia);
+      if (i < estrellas) {
+        const llena = estrella(this, x, yy, true, tam).setScale(0).setAngle(-90);
+        panel.add(llena);
+        this.time.delayedCall(250 + i * 300, () => {
+          if (!this.scene.isActive()) return;
+          const sx = (tam / llena.width) || 1;
+          this.tweens.add({ targets: llena, scale: sx, angle: 0, duration: 420, ease: 'Back.easeOut' });
+          Sonido.estrella(i);
+          chispas(this, cx + x, cy + yy, [0xffd54a, 0xffffff, 0xffa63a], { cantidad: 18, velocidad: 160, depth: Z.panel + 5 });
+        });
       }
-    } else {
-      const starStr = '★'.repeat(estrellas) + '☆'.repeat(3 - estrellas);
-      const star = reg(this.add.text(panelX, height / 2 - 60, starStr, {
-        fontSize: '30px', color: '#fff176', fontFamily: FUENTE
-      }).setOrigin(0.5));
-      star.setScale(0.4); star.setAlpha(0);
-      this.tweens.add({ targets: star, scale: 1, alpha: 1, duration: 350, ease: 'Back.easeOut' });
-    }
-    if (mejorEstr > estrellas) {
-      reg(this.add.text(panelX, height / 2 - 40, `mejor: ${'★'.repeat(mejorEstr)}`, {
-        fontSize: '10px', color: '#888', fontFamily: FUENTE
-      }).setOrigin(0.5));
     }
 
-    const tiempoTxt = `⏱ ${GameState.formatearTiempo(segundos)}` +
-      (marca.mejor < Math.round(segundos) ? `  (tu mejor: ${GameState.formatearTiempo(marca.mejor)})` : '');
-    reg(this.add.text(panelX, height / 2 - 24,
-      `movimientos: ${this.moveCount}  ·  óptimo: ${this.OPTIMO}  ·  ${tiempoTxt}`, {
-      fontSize: '11px', color: '#888', fontFamily: FUENTE
-    }).setOrigin(0.5));
-    // Recompensa. Se muestran las MONEDAS, no los puntos: son las que el chico
-    // gasta en la tienda y las que dependen de las estrellas que acaba de ver.
-    // Los puntos quedan como récord interno; decirle "+280 puntos" cuando recibe
-    // 50 monedas sólo confunde.
-    let scoreTxt, scoreCol, scoreSz;
-    if (monedas > 0 && eraPrimera) {
-      scoreTxt = `+${monedas} 🪙`;                       scoreCol = '#ffd54f'; scoreSz = '20px';
-    } else if (monedas > 0) {
-      scoreTxt = `+${monedas} 🪙 · ¡mejoraste!`;         scoreCol = '#4caf50'; scoreSz = '16px';
-    } else if (ganados > 0) {
-      scoreTxt = `¡nuevo récord! (${mejor} pts)`;        scoreCol = '#4caf50'; scoreSz = '13px';
-    } else {
-      scoreTxt = `saca más estrellas para ganar 🪙`;     scoreCol = '#888';    scoreSz = '12px';
+    // ── monedas ganadas (con su "tin tin" contando) ──
+    const yM = yE + 90;
+    if (monedas > 0) {
+      const m = this.add.container(0, yM);
+      const mk = SpriteConfig.get('ui', 'moneda');
+      if (mk && this.textures.exists(mk)) m.add(this.add.image(-38, 0, mk).setDisplaySize(46, 46));
+      const t = this.add.text(-8, 0, '+0', estiloTexto(34, '#ffd54a', '#8a5a10', 6)).setOrigin(0, 0.5);
+      m.add(t);
+      panel.add(m);
+      m.setAlpha(0);
+      const arranque = 250 + estrellas * 300 + 100;
+      this.tweens.add({ targets: m, alpha: 1, duration: 200, delay: arranque });
+      const cont = { v: 0 };
+      this.tweens.add({
+        targets: cont, v: monedas, duration: 700, delay: arranque, ease: 'Quad.easeOut',
+        onUpdate: () => {
+          const v = Math.round(cont.v);
+          if (v !== this._ultMoneda && v % 10 === 0) Sonido.moneda();
+          this._ultMoneda = v;
+          t.setText(`+${v}`);
+        },
+      });
+    } else if (mejorEstr > estrellas) {
+      // ya lo había hecho mejor: se lo recordamos con estrellitas chicas
+      for (let i = 0; i < 3; i++) panel.add(estrella(this, -26 + i * 26, yM, i < mejorEstr, 22).setAlpha(0.8));
     }
-    reg(this.add.text(panelX, height / 2 - 2, scoreTxt, {
-      fontSize: scoreSz, color: scoreCol, fontFamily: FUENTE
-    }).setOrigin(0.5));
 
+    // ── botones: casita · reiniciar · siguiente ──
+    const yB = H / 2 - 62;
     const siguienteIdx = this.nivelIdx + 1;
     const sigPack      = packRequerido(siguienteIdx);
     const sigBloqueado = sigPack && !GameState.tieneDesbloqueo(sigPack);
     const hayMas = siguienteIdx < LEVELS.length && GameState.puedeJugarHoy();
 
+    panel.add(boton(this, -120, yB, { w: 66, fill: CLAY.azul, icono: 'casita', onTap: () => irA(this, 'RoomScene') }));
+    panel.add(boton(this, -40, yB, { w: 66, fill: CLAY.amarillo, icono: 'reiniciar', onTap: () => this._reiniciar() }));
     if (hayMas && !sigBloqueado) {
-      const btnSig = reg(this.add.text(panelX, height / 2 + 30, '[ siguiente nivel ]', {
-        fontSize: '13px', color: '#4fc3f7', fontFamily: FUENTE
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-      btnSig.on('pointerdown', () => this.scene.start('PuzzleScene', { nivelIdx: siguienteIdx }));
+      const sig = boton(this, 90, yB, { w: 132, h: 80, r: 34, fill: CLAY.verde, icono: 'play', tamIcono: 44, sonido: 'pop',
+        onTap: () => irA(this, 'PuzzleScene', { nivelIdx: siguienteIdx }) });
+      panel.add(sig);
+      this.time.delayedCall(1600, () => { if (sig.active) respirar(this, sig, 0.06, 600); });
     } else if (hayMas && sigBloqueado) {
-      const btnTienda = reg(this.add.text(panelX, height / 2 + 30, '[ desbloquear en la tienda 🛒 ]', {
-        fontSize: '12px', color: '#fff176', fontFamily: FUENTE
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-      btnTienda.on('pointerdown', () => this.scene.start('StoreScene', { cat: 'niveles' }));
+      // el próximo tablero se compra: candado + bolsita de la tienda
+      const t = boton(this, 90, yB, { w: 132, h: 80, r: 34, fill: CLAY.naranja, icono: 'tienda', tamIcono: 40,
+        onTap: () => irA(this, 'StoreScene', { cat: 'niveles' }) });
+      panel.add(t);
+      const lk = SpriteConfig.get('ui', 'candado');
+      if (lk && this.textures.exists(lk)) panel.add(this.add.image(140, yB - 34, lk).setDisplaySize(40, 40));
     } else {
-      const msg = !GameState.puedeJugarHoy() ? '¡completaste tus niveles de hoy!' : '¡completaste todos los niveles!';
-      reg(this.add.text(panelX, height / 2 + 30, msg, {
-        fontSize: '11px', color: '#888', fontFamily: FUENTE
-      }).setOrigin(0.5));
+      // sin más niveles hoy: luna dormida (vuelve mañana)
+      panel.add(this.add.text(90, yB - 4, '🌙', { fontSize: '54px' }).setOrigin(0.5));
     }
 
-    const btnSalir = reg(this.add.text(panelX, height / 2 + 62, '[ volver al cuarto ]', {
-      fontSize: '11px', color: '#444', fontFamily: FUENTE
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
-    btnSalir.on('pointerdown', () => this.scene.start('RoomScene'));
-
-    // pista para reabrir el resumen tras cerrar con la X
-    reg(this.add.text(panelX, height / 2 + 84, '(✕ cierra · R reinicia)', {
-      fontSize: '9px', color: '#444', fontFamily: FUENTE
-    }).setOrigin(0.5));
-  }
-
-  _actualizarStatus() {
-    if (!this.statusTxt) return;
-    const hasSwitches = this.COMPONENTS.some(c => c.sym === 's');
-    if (this.connected && hasSwitches) {
-      const pendientes = Object.values(this.switchStates).filter(v => !v).length;
-      this.statusTxt.setColor('#fff176');
-      this.statusTxt.setText(`click en\nel switch`);
-    } else {
-      const alineados = this.SNAKE_MAP.filter((sm, i) => sm.comp && this._segmentoAlineado(i)).length;
-      const total     = this.SNAKE_MAP.filter(sm => sm.comp).length;
-      this.statusTxt.setColor('#555');
-      this.statusTxt.setText(alineados > 0 ? `${alineados}/${total} listos` : 'mueve la\nserpiente');
-    }
+    // X chiquita: cerrar para mirar el circuito resuelto
+    const x = boton(this, W / 2 - 16, -H / 2 + 16, { w: 40, fill: CLAY.rojo, icono: 'cerrar',
+      onTap: () => objs.forEach(o => o.destroy()) });
+    panel.add(x);
   }
 
   // segundos transcurridos desde que arrancó el nivel (congelado al resolverlo)
@@ -1208,14 +1286,6 @@ export default class PuzzleScene extends Phaser.Scene {
 
   update() {
     if (this.solved) return;
-
-    // el reloj se refresca sólo cuando cambia el segundo, no en cada frame
-    const s = Math.floor(this._segundos());
-    if (s !== this._ultimoSegundo) {
-      this._ultimoSegundo = s;
-      if (this.tiempoTxt) this.tiempoTxt.setText(`⏱ ${GameState.formatearTiempo(s)}`);
-    }
-
     const { left, right, up, down } = this.cursors;
     if (Phaser.Input.Keyboard.JustDown(left))  this._mover(-1,  0);
     if (Phaser.Input.Keyboard.JustDown(right)) this._mover( 1,  0);

@@ -39,17 +39,19 @@ Si una pantalla necesita que el niño lea para saber qué hacer, esa pantalla es
 | Control | Acción |
 |---|---|
 | Flechas | mover al personaje |
-| `E` | interactuar con lo que esté cerca |
+| `E` o tocar la burbuja | interactuar con lo que esté cerca |
 
-Acercarse al **banco de trabajo** abre un puzzle; acercarse a la **tienda** abre el catálogo.
+Sobre el **banco de trabajo** y la **tienda** flota una burbuja chiquita que llama de lejos; al
+acercarse crece a un botón (▶ / bolsita) que se puede tocar. En el celular no hay botón `E`: se toca
+la burbuja.
 
 ### En el puzzle
 
 | Control | Acción |
 |---|---|
-| Flechas | mover la serpiente |
-| `R` | reiniciar el nivel |
-| Clic sobre un interruptor | abrirlo o cerrarlo |
+| Flechas (teclado o pad en pantalla) | mover la serpiente |
+| `R` o botón ↻ | reiniciar el nivel |
+| Tocar un interruptor | abrirlo o cerrarlo |
 
 La serpiente **entra al tablero por una esquina**: al principio sólo se ve la cabeza y el cuerpo va
 saliendo detrás a medida que avanza. La esquina cambia en cada nivel.
@@ -60,13 +62,16 @@ interruptores, la corriente se detiene en el primero que esté abierto.
 
 ### Componentes
 
-| Componente | Sigla | Color |
-|---|---|---|
-| Batería | `BAT` | cian |
-| Resistencia | `R` | morado |
-| Capacitor | `CAP` | verde agua |
-| LED | `LED` | naranja |
-| Interruptor | `SW` | amarillo |
+| Componente | Color de su hueco |
+|---|---|
+| Batería | azul |
+| Resistencia | lila |
+| Capacitor | verde menta |
+| LED | rojo |
+| Interruptor | amarillo |
+
+En el tablero no hay siglas: cada pieza se reconoce por su dibujo de plastilina y por el platito de
+color en el que está apoyada.
 
 Todo nivel tiene **siempre** al menos una batería, una resistencia y un LED. La batería abre la
 secuencia y el LED la cierra, sin excepción.
@@ -122,20 +127,21 @@ src/
   levels.js              los 50 niveles + el currículo por conceptos
   tienda.js              catálogo y precios
   SpriteConfig.js        registro central de assets y tipografía
-  ClayUI.js              paleta y widgets del estilo plastilina
+  ClayUI.js              el lenguaje visual de todo el juego: botones, iconos, transiciones, partículas
+  Sonido.js              efectos y música sintetizados con WebAudio (sin archivos de audio)
   dev-guard.js           define window.__DEV__ (script clásico, corre primero)
   Dev.js                 API de modo desarrollo para las escenas
   state/
     GameState.js         progreso, monedas, estrellas, tiempos, cupo diario, compras
   scenes/
     BootScene.js         precarga de assets
-    LoginScene.js        selección de perfil
+    LoginScene.js        selección de perfil (y de personaje, la primera vez)
     RoomScene.js         el cuarto: hub con física arcade
-    LevelSelectScene.js  selector de niveles por concepto
+    LevelSelectScene.js  mapa de niveles
     PuzzleScene.js       el puzzle completo
     StoreScene.js        la tienda
 
-assets/                  arte de plastilina: fondos, muebles, personajes, ui, grid
+assets/                  arte de plastilina: fondos, muebles, personajes, componentes, ui
 ```
 
 **Flujo de datos.** Todo el progreso vive en el singleton `GameState`, que persiste en `localStorage`
@@ -241,14 +247,23 @@ análisis de dificultad por nivel.
 
 ## Guía visual
 
-El juego enseña el orden sin depender de que el niño sepa leer:
+El juego enseña sin depender de que el niño sepa leer:
 
-- **El próximo componente late.** Un halo y un aro pulsante marcan a dónde ir ahora. Empieza siempre
-  en la batería y avanza solo cuando la cabeza pisa el componente actual. Indica el destino, no el
-  camino: rutear la serpiente sigue siendo del jugador.
-- **Camino punteado.** Piedritas del color del destino marcan la ruta entrada → batería → … → LED.
+- **El próximo componente salta.** La pieza a la que hay que ir ahora rebota y suelta ondas de su
+  color. Empieza siempre en la batería y avanza sola cuando la cabeza la pisa. Indica el destino, no
+  el camino: rutear la serpiente sigue siendo del jugador.
+- **Camino de piedritas.** Bolitas del color del destino marcan la ruta entrada → batería → … → LED.
   Es **gratis en los 5 primeros niveles**; del sexto en adelante lo enciende el botón de pista.
-- **Números y siglas** siguen presentes para quien sí sabe leer, sin estorbar a quien no.
+  La ruta es una solución real en el óptimo, calculada simulando la serpiente; si el niño se
+  desvía, se recalcula desde donde está, y si ya no hay salida el botón ↻ late.
+- **Bandeja de la secuencia.** Debajo del tablero, las piezas en orden; cada una se marca con un
+  tilde verde al quedar conectada. Se ve cuando se ve el camino.
+- **Estrellas en vivo.** Arriba del tablero hay tres estrellas que se caen si el jugador se pasa del
+  óptimo: "más corto es mejor", sin un solo número.
+- **Manito guía.** En los 3 primeros niveles, si el niño se queda quieto aparece una mano señalando
+  la flecha que conviene tocar.
+- **Todo suena.** Paso, choque, pieza encendida (las notas suben con el orden), victoria.
+- Los **números de orden** siguen, chiquitos en una esquina, para quien sí sabe leer.
 
 ---
 
@@ -267,7 +282,11 @@ muebles: {
 ```
 
 `listo: false` marca lo que aún no está dibujado: no se precarga (evita 404s en consola) y la escena
-usa el placeholder. **Esa lista es el checklist de arte pendiente.**
+usa el placeholder. **Esa lista es el checklist de arte pendiente** (hoy: sólo `pelota`).
+
+El tablero del puzzle y la serpiente **no usan sprites**: la tabla de madera, las fichas de masa y el
+cuerpo de la serpiente se dibujan en vector con el mismo estilo de plastilina. Sólo la cabeza y los
+componentes son PNG.
 
 Los personajes son PNGs sueltos por pose —no un spritesheet— con dos valores medidos sobre el canal
 alfa para que la figura no se hunda ni crezca al girar:
@@ -318,6 +337,7 @@ existen para el usuario final: los parámetros se ignoran y el juego arranca en 
 | `?nivel=N` | entra directo a ese puzzle (perfil `Dev`, todo desbloqueado) |
 | `?sel` | selector de niveles |
 | `?store` | tienda |
+| `?room` | cuarto (sin editor) |
 | `?editroom` | editor del cuarto — arrastrar objetos, `[E]` exportar, `[R]` reset |
 | `?editstore` | editor de la tienda |
 
@@ -347,22 +367,19 @@ consultan vía `src/Dev.js`.
 - [x] Registro de tiempos por nivel
 - [x] Modo desarrollo aislado del usuario final
 
-**Prioridad alta** — sin esto un niño de 6 no puede jugar solo
+- [x] Un solo estilo visual en todo el juego (plastilina), con botones de icono
+- [x] Sin siglas en el tablero; sin "mov", "óptimo" ni "pts" en pantalla
+- [x] Audio: efectos y música sintetizados, con botón de silencio
+- [x] Elegir personaje al crear un perfil
+- [x] Transiciones entre pantallas, celebración al ganar, estrellas en vivo
+- [x] Onboarding: manito guía en los primeros niveles
 
-- [ ] Quitar las siglas `BAT / R / CAP / LED` del tablero
-- [ ] Onboarding sin texto: que el primer nivel se enseñe solo
+**Pendiente**
 
-**Prioridad media**
-
-- [ ] Audio: efectos, música y voz opcional
-- [ ] Pantalla para elegir personaje (el estado ya se guarda)
-- [ ] Botones con ícono; esconder los números de adulto ("mov", "óptimo")
-
-**Pulido y deuda**
-
-- [ ] Transiciones entre pantallas y celebración al ganar
+- [ ] Onboarding completo: una animación que muestre la mecánica antes del nivel 1
+- [ ] Voz opcional ("¡muy bien!") para reforzar sin texto
 - [ ] Poner al día `editor.html` y `tester.html`
-- [ ] 3 piezas de arte pendientes: `tile_head`, `tile_body`, `pelota`
+- [ ] Arte pendiente: `pelota`
 - [ ] Profundidad en el cuarto: caminar por detrás de los muebles
 
 **Más adelante**
@@ -384,6 +401,7 @@ consultan vía `src/Dev.js`.
 | v0.5 | Arte de plastilina, tipografía redondeada, selector rediseñado, modo desarrollo aislado |
 | v0.6 | 50 niveles con progresión por tamaño de tablero. Se corrigieron dos fallas que hacían 44 de 50 niveles irresolubles y volvían inalcanzable la meta de 3★ |
 | v0.7 | Economía atada a las estrellas. Guía visual del orden y registro de tiempos |
+| v0.8 | Rediseño visual completo: todo el juego en plastilina (el puzzle dejó el tema oscuro), botones de icono, tablero de madera, serpiente continua, mapa de niveles, audio sintetizado, transiciones, celebración, estrellas en vivo, manito guía y elección de personaje |
 
 ---
 

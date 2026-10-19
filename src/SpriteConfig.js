@@ -19,20 +19,17 @@ const SpriteConfig = {
   USE_SPRITES: true,
 
   // ── fondos de cada escena ──
+  // El puzzle no tiene fondo propio: usa el cuarto oscurecido (ver PuzzleScene._dibujarFondo).
+  // assets/fondos/puzzle.png (azul noche) quedó del estilo viejo y ya no se carga.
   fondos: {
     login:  { key: 'fondo_login',  path: 'assets/fondos/login.png'  },
-    puzzle: { key: 'fondo_puzzle', path: 'assets/fondos/puzzle.png' },
     store:  { key: 'fondo_store',  path: 'assets/fondos/store.png'  },
     select: { key: 'fondo_select', path: 'assets/fondos/select.png' },
   },
 
-  // ── cuadros del grid del puzzle ──
-  grid: {
-    tile:      { key: 'tile',      path: 'assets/grid/tile.png'      },
-    tile_head: { key: 'tile_head', path: 'assets/grid/tile_head.png', listo: false },
-    tile_body: { key: 'tile_body', path: 'assets/grid/tile_body.png', listo: false },
-    tile_goal: { key: 'tile_goal', path: 'assets/grid/tile_goal.png' },
-  },
+  // (La categoría `grid` —tile, tile_head, tile_body, tile_goal— se eliminó en v0.8:
+  // el tablero ahora es madera y fichas de masa dibujadas en vector, y la serpiente es
+  // un tubo continuo. Los PNG oscuros de assets/grid/ quedaron sin uso.)
 
   // ── personajes jugables ──
   // Dos personajes ('nino' | 'nina') x cuatro direcciones. Imágenes sueltas de 500x500
@@ -153,7 +150,7 @@ const SpriteConfig = {
   },
 
   // categorías que son imágenes simples (para precarga genérica y helper)
-  CATS_IMAGEN: ['fondos', 'grid', 'cuarto', 'muebles', 'componentes', 'serpiente', 'ui', 'personajes'],
+  CATS_IMAGEN: ['fondos', 'cuarto', 'muebles', 'componentes', 'serpiente', 'ui', 'personajes'],
 
   // Coloca un sprite si está disponible Y cargado; si no, ejecuta el dibujo vectorial.
   // Centraliza el patrón placeholder→pixel-art. Devuelve lo que se haya creado.

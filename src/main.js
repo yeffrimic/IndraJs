@@ -13,7 +13,7 @@ window.isMobile = isMobile;
 const config = {
   type:   Phaser.AUTO,
   parent: 'game-container',
-  backgroundColor: '#0d0d1f',
+  backgroundColor: '#2a1a0e',
 
   scale: {
     mode:       Phaser.Scale.FIT,
