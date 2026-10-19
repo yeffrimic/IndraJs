@@ -418,7 +418,48 @@
       position: fixed; top: 8px; right: max(10px, env(safe-area-inset-right)); flex: none;
       background: var(--tinta); padding: 4px 10px; border-radius: 12px; font-size: 13px; pointer-events: none;
     }
-    body.libro { padding: 12px calc(76px + env(safe-area-inset-right)) 24px calc(76px + env(safe-area-inset-left)); }
+    body.libro {
+      padding: 8px calc(76px + env(safe-area-inset-right)) 8px calc(76px + env(safe-area-inset-left));
+      height: 100vh; height: 100dvh; overflow: hidden;      /* la página ES la pantalla */
+    }
+
+    /* Cada hoja mide exactamente la pantalla; si trae más contenido, se scrollea por
+       dentro y el libro (marco, lomo, botones) queda quieto. */
+    body.libro .escenario { height: calc(100vh - 16px) !important; height: calc(100dvh - 16px) !important; transition: none; }
+    body.libro .pagina {
+      bottom: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--tinta-suave) transparent;
+      padding: 40px 22px 18px;
+    }
+    body.libro .pagina .folio { position: static; display: block; text-align: right; margin-top: 14px; }
+    body.libro .pagina .cabecera { left: 22px; right: 48px; top: 12px; }
+    h2 { font-size: 24px; margin-top: 8px; }
+
+    /* portada en dos columnas: título a la izquierda, dibujos a la derecha — entra entera */
+    body.libro .portada {
+      display: grid; grid-template-columns: 1.15fr 1fr; grid-template-rows: auto auto auto auto;
+      align-content: center; align-items: center; column-gap: 14px; row-gap: 6px;
+      padding: 14px 18px; border-width: 6px;
+    }
+    .portada .franja { grid-column: 1; grid-row: 1; justify-self: center; margin: 0; font-size: 10px; }
+    .portada h1      { grid-column: 1; grid-row: 2; font-size: clamp(30px, 6.4vw, 60px); text-shadow: 3px 3px 0 var(--tinta); }
+    .portada .sub    { grid-column: 1; grid-row: 3; font-size: 16px; margin: 0; }
+    .portada .datos  { grid-column: 1; grid-row: 4; margin: 4px 0 0; }
+    .portada .heroe  {
+      grid-column: 2; grid-row: 1 / span 2; position: static; display: flex; height: auto; margin: 0;
+    }
+    .portada .heroe img { position: static; width: 23%; }
+    .portada .heroe .h1 { width: 30%; transform: rotate(-8deg); }
+    .portada .heroe .h2 { width: 21%; transform: rotate(10deg) translateY(10px); }
+    .portada .heroe .h3 { width: 26%; transform: rotate(-14deg) translateY(-10px); }
+    .portada .heroe .h4 { width: 22%; transform: rotate(6deg) translateY(8px); }
+    .portada .glifos { grid-column: 2; grid-row: 3; margin: 0; }
+    .portada .glifos svg { width: 20px; height: 28px; }
+    .portada .sello  {
+      grid-column: 2; grid-row: 4; position: static; justify-self: center; margin: 0;
+      width: 74px; height: 74px; font-size: 8px;
+    }
+    body.libro .portada .folio { display: none; }
   }
 
   /* ── para imprimir en el aula ── */
@@ -1182,6 +1223,7 @@
       const arriba = adelante ? de : a, abajo = adelante ? a : de;
       arriba.style.zIndex = 3; abajo.style.zIndex = 1;
       arriba.classList.add('visible'); abajo.classList.add('visible');
+      a.scrollTop = 0;                      // (acostado, cada hoja scrollea por dentro)
       alto(de, a);
       fsst();
 
