@@ -129,6 +129,8 @@ const SpriteConfig = {
     energia:   { key: 'energia',   path: 'assets/ui/energia.png',   escala: 1 },
     candado:   { key: 'candado',   path: 'assets/ui/candado.png',   escala: 1 },
     pista:     { key: 'pista',     path: 'assets/ui/pista.png',     escala: 1 },
+    // la marca va siempre así, en mayúsculas: CREABOT (blanco, para fondos oscuros)
+    creabot:   { key: 'creabot',   path: 'assets/creabot-blanco.png', escala: 1 },
   },
 
   // ── helpers ──

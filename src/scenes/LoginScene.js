@@ -48,10 +48,15 @@ export default class LoginScene extends Phaser.Scene {
     boton(this, width - 12 - tL / 2, 12 + tL / 2, { w: tL, fill: CLAY.naranja, icono: 'libro', onTap: abrirManual });
 
     // créditos
-    this.add.text(width / 2, height - 8, 'Creabot  ·  @yeffrimic  ·  Priscila Ramírez @purishiry  ·  v0.8', {
+    const ck = SpriteConfig.get('ui', 'creabot');
+    if (ck && this.textures.exists(ck)) {
+      const logo = this.add.image(14, height - 10, ck).setOrigin(0, 1).setAlpha(0.9);
+      logo.setScale(110 / logo.width);
+    }
+    this.add.text(width - 12, height - 8, '@yeffrimic  ·  Priscila Ramírez @purishiry  ·  v0.8', {
       fontSize: window.isMobile ? '13px' : '11px', color: '#fff3d6', fontFamily: FUENTE,
       stroke: '#5a3a1a', strokeThickness: 3,
-    }).setOrigin(0.5, 1).setAlpha(0.8);
+    }).setOrigin(1, 1).setAlpha(0.8);
   }
 
   // ── logo de plastilina: cada letra de un color, entra saltando y después ondula ──

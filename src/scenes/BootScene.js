@@ -18,6 +18,14 @@ export default class BootScene extends Phaser.Scene {
     const dot = this.add.circle(width / 2, y0 - 40, 12, 0xf08a3c).setStrokeStyle(4, 0xa35a1e);
     this.tweens.add({ targets: dot, y: y0 - 60, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.easeOut' });
 
+    // CREABOT presenta: el logo se pide primero y aparece apenas llega
+    this.load.image('creabot', 'assets/creabot-blanco.png');
+    this.load.once('filecomplete-image-creabot', () => {
+      const logo = this.add.image(width / 2, y0 + 90, 'creabot').setAlpha(0);
+      logo.setScale(200 / logo.width);
+      this.tweens.add({ targets: logo, alpha: 0.9, duration: 400 });
+    });
+
     this.load.on('progress', v => {
       fill.clear();
       if (v <= 0) return;
@@ -34,6 +42,7 @@ export default class BootScene extends Phaser.Scene {
       const { images, spritesheets } = SpriteConfig.listarParaCargar();
 
       images.forEach(a => {
+        if (a.key === 'creabot') return;          // ya se pidió arriba, primero que todo
         this.load.image(a.key, a.path);
       });
 

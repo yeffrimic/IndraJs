@@ -98,6 +98,9 @@
     background: rgba(253,243,220,.92); border: 3px solid var(--borde); border-radius: 16px;
     padding: 4px 12px; font-weight: 600; font-size: 14px;
   }
+  .presenta { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 14px; text-decoration: none; }
+  .presenta img { width: min(150px, 38vw); filter: drop-shadow(0 2px 3px rgba(42,26,14,.7)); }
+  .presenta small { font-weight: 600; font-size: 12px; letter-spacing: 3px; color: #fff6e0; text-transform: uppercase; opacity: .85; }
   .bajar { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #fff6e0; font-size: 26px; animation: flota 1.8s ease-in-out infinite; text-decoration: none; }
 
   /* ── secciones ── */
@@ -185,6 +188,9 @@
   .credito:active, .credito:hover { background: rgba(253,243,220,.18); }
   .credito b { color: var(--amarillo); }
   .credito small { display: block; font-size: 13px; color: #c8a070; }
+  .marca { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; margin-top: 14px; }
+  .marca small { font-size: 12px; letter-spacing: 3px; color: #c8a070; text-transform: uppercase; }
+  .marca img { width: min(220px, 60vw); }
   footer .chico { font-size: 13px; color: #a8875a; margin-top: 10px; }
 
   /* ── tableta ── */
@@ -227,6 +233,9 @@
 <body>
 
 <header class="heroe">
+  <a class="presenta" href="https://creabot.us" target="_blank" rel="noopener" aria-label="CREABOT">
+    <img src="assets/creabot-blanco.png" alt="CREABOT"><small>presenta</small>
+  </a>
   <h1 class="logo" aria-label="Circuito">
     <span style="--c:#e8705e;--i:0">C</span><span style="--c:#f08a3c;--i:1">I</span><span style="--c:#f6c945;--i:2">R</span><span style="--c:#7cc35a;--i:3">C</span><span style="--c:#5fb0e8;--i:4">U</span><span style="--c:#b48ad8;--i:5">I</span><span style="--c:#e8705e;--i:6">T</span><span style="--c:#f08a3c;--i:7">O</span>
   </h1>
@@ -335,8 +344,8 @@
 
 <footer>
   <p class="hecho">Hecho con plastilina y cariño en Guatemala</p>
+  <a class="marca" href="https://creabot.us" target="_blank" rel="noopener"><small>un proyecto de</small><img src="assets/creabot-blanco.png" alt="CREABOT"></a>
   <div class="creditos">
-    <a class="credito" href="https://creabot.us" target="_blank" rel="noopener"><span><b>Creabot</b><small>un proyecto de</small></span></a>
     <a class="credito" href="https://www.instagram.com/yeffrimic/" target="_blank" rel="noopener"><span><b>Yeffri Salazar</b><small>@yeffrimic</small></span></a>
     <a class="credito" href="https://www.instagram.com/purishiry/" target="_blank" rel="noopener"><span><b>Priscila Ramírez</b><small>@purishiry</small></span></a>
   </div>

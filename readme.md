@@ -433,7 +433,7 @@ consultan vía `src/Dev.js`.
 
 ## Créditos
 
-Un proyecto de [Creabot](https://creabot.us), Guatemala.
+Un proyecto de [CREABOT](https://creabot.us), Guatemala.
 
 - **Yeffri Salazar** — [@yeffrimic](https://www.instagram.com/yeffrimic/)
 - **Priscila Ramírez** — [@purishiry](https://www.instagram.com/purishiry/)
